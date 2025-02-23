@@ -1,11 +1,13 @@
 package pgrepo
 
-type SchedulerRepository struct{}
+import "github.com/tuanta7/qworker/pkg/db"
 
-func NewSchedulerRepository() *SchedulerRepository {
-	return &SchedulerRepository{}
+type SchedulerRepository struct {
+	*db.PostgresClient
 }
 
-func (r *SchedulerRepository) LoadConfiguration() {
-	// Create a job
+func NewSchedulerRepository(pc *db.PostgresClient) *SchedulerRepository {
+	return &SchedulerRepository{pc}
 }
+
+func (r *SchedulerRepository) LoadConfiguration() {}

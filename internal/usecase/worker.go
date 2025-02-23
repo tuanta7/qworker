@@ -1,4 +1,4 @@
-package jobs
+package usecase
 
 import "github.com/hibiken/asynq"
 

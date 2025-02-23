@@ -1,13 +1,14 @@
 package config
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 )
 
-const envPrefix = "Q_WORKER"
+const envPrefix = "QWORKER"
 
 type Config struct {
 	ServerName string `envconfig:"SERVER_NAME" default:"worker"`
@@ -22,13 +23,14 @@ type PostgresConfig struct {
 	Port     uint32 `envconfig:"POSTGRES_PORT" default:"5432"`
 	Username string `envconfig:"POSTGRES_USERNAME" default:"postgres"`
 	Password string `envconfig:"POSTGRES_PASSWORD" default:"password"`
-	Database string `envconfig:"POSTGRES_DATABASE" default:"worker"`
+	Database string `envconfig:"POSTGRES_DATABASE" default:"qworker"`
 }
 
 type RedisConfig struct {
-	Sentinels []string `envconfig:"REDIS_SENTINELS" default:"localhost:26379"`
-	Master    string   `envconfig:"REDIS_MASTER" default:"mymaster"`
-	Password  string   `envconfig:"REDIS_PASSWORD" default:"password"`
+	Sentinels  []string `envconfig:"REDIS_SENTINELS" default:"localhost:26379"`
+	MasterName string   `envconfig:"REDIS_MASTER_NAME" default:"mymaster"`
+	Password   string   `envconfig:"REDIS_PASSWORD" default:""`
+	Database   int      `envconfig:"REDIS_DATABASE" default:"0"`
 }
 
 func NewConfig() *Config {
@@ -45,4 +47,8 @@ func NewConfig() *Config {
 	}
 
 	return config
+}
+
+func (p PostgresConfig) GetConnectionString() string {
+	return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", p.Username, p.Password, p.Host, p.Port, p.Database)
 }
