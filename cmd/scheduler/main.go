@@ -5,7 +5,6 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
-	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/internal/usecase"
 	"github.com/tuanta7/qworker/pkg/db"
@@ -20,28 +19,20 @@ func main() {
 	}
 	defer pgClient.Close()
 
+	asynqClient := asynq.NewClient(asynq.RedisFailoverClientOpt{
+		MasterName:    cfg.Redis.MasterName,
+		SentinelAddrs: cfg.Redis.Sentinels,
+		Password:      cfg.Redis.Password,
+		DB:            cfg.Redis.Database,
+	})
+	defer asynqClient.Close()
+
 	schedulerRepository := pgrepo.NewSchedulerRepository(pgClient)
 	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository)
-	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase)
 
-	srv := asynq.NewServer(
-		asynq.RedisFailoverClientOpt{
-			MasterName:    cfg.Redis.MasterName,
-			SentinelAddrs: cfg.Redis.Sentinels,
-			Password:      cfg.Redis.Password,
-			DB:            cfg.Redis.Database,
-		}, asynq.Config{
-			Concurrency: 10,
-			Queues: map[string]int{
-				"default":  1,
-				"critical": 5,
-			},
-		})
-
-	mux := asynq.NewServeMux()
-	mux.HandleFunc("message:send", schedulerHandler.SendSyncMessage)
-
-	if err := srv.Run(mux); err != nil {
-		log.Fatalf("Asynq server stopped: %v", err)
+	// This should be done in a cron job, with interval
+	task := asynq.NewTask("user:sync", schedulerUsecase.NewSyncMessage())
+	if _, err := asynqClient.Enqueue(task); err != nil {
+		log.Fatalf("Enqueue task: %v", err)
 	}
 }

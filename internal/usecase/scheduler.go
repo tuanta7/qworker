@@ -17,10 +17,14 @@ func NewSchedulerUsecase(schedulerRepo *pgrepo.SchedulerRepository) *SchedulerUs
 	}
 }
 
-func (u *SchedulerUsecase) NewCronJob(period time.Duration) *cron.Cron {
+func (u *SchedulerUsecase) NewJob(period time.Duration) *cron.Cron {
 	return cron.New(cron.WithSeconds())
 }
 
 func (u *SchedulerUsecase) TerminateJob(job *cron.Cron) {
 	job.Stop()
+}
+
+func (u *SchedulerUsecase) NewSyncMessage() []byte {
+	return nil
 }
