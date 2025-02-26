@@ -29,10 +29,5 @@ func main() {
 
 	schedulerRepository := pgrepo.NewSchedulerRepository(pgClient)
 	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository)
-
-	// This should be done in a cron job, with interval
-	task := asynq.NewTask("user:sync", schedulerUsecase.NewSyncMessage())
-	if _, err := asynqClient.Enqueue(task); err != nil {
-		log.Fatalf("Enqueue task: %v", err)
-	}
+	schedulerHandler := handler.NewSchedulerHandler(asynqClient, schedulerUsecase)
 }
