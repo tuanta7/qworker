@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
+	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/internal/usecase"
 	"github.com/tuanta7/qworker/pkg/db"
@@ -30,4 +32,8 @@ func main() {
 	schedulerRepository := pgrepo.NewSchedulerRepository(pgClient)
 	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository)
 	schedulerHandler := handler.NewSchedulerHandler(asynqClient, schedulerUsecase)
+
+	go func() {
+		schedulerHandler.CreateNewJob(1, 10*time.Second)
+	}()
 }

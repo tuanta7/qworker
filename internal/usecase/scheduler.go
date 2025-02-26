@@ -28,3 +28,7 @@ func (u *SchedulerUsecase) TerminateJob(job *cron.Cron) {
 func (u *SchedulerUsecase) NewSyncMessage() []byte {
 	return nil
 }
+
+func (u *SchedulerUsecase) GetConnectorConfigs() ([]string, error) {
+	return nil, nil
+}
