@@ -1,55 +1,55 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/hibiken/asynq"
+	"github.com/robfig/cron/v3"
 	"github.com/tuanta7/qworker/internal/usecase"
 )
 
 var jobMutex sync.Mutex
 
 type SchedulerHandler struct {
-	asynqClient *asynq.Client
 	schedulerUC *usecase.SchedulerUsecase
-	jobMap      map[uint64]context.CancelFunc
+	jobMap      map[uint64]cron.EntryID
+	cronClient  *cron.Cron
 }
 
-func NewSchedulerHandler(asynqClient *asynq.Client, schedulerUC *usecase.SchedulerUsecase) *SchedulerHandler {
+func NewSchedulerHandler(schedulerUC *usecase.SchedulerUsecase, cronClient *cron.Cron) *SchedulerHandler {
 	return &SchedulerHandler{
-		asynqClient: asynqClient,
 		schedulerUC: schedulerUC,
+		cronClient:  cronClient,
+		jobMap:      make(map[uint64]cron.EntryID),
 	}
 }
 
-func (h *SchedulerHandler) CreateNewJob(connectorID uint64, interval time.Duration) {
-	ctx, cancel := context.WithCancel(context.Background())
+func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Duration) error {
+	job := h.schedulerUC.SendSyncMessage(connectorID)
+	jobID, err := h.cronClient.AddFunc(fmt.Sprintf("@every %s", interval), job)
+	if err != nil {
+		log.Printf("Add cron job: %v", err)
+		return err
+	}
 
 	jobMutex.Lock()
-	h.jobMap[connectorID] = cancel
+	h.jobMap[connectorID] = jobID
 	jobMutex.Unlock()
 
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		select {
-		case <-ctx.Done():
-			fmt.Printf("Stopped job: %d\n", connectorID)
-			return
-		case <-ticker.C:
-			task := asynq.NewTask("user:sync", h.schedulerUC.NewSyncMessage())
-			if _, err := h.asynqClient.Enqueue(task); err != nil {
-				log.Printf("Enqueue task: %v", err)
-			}
-		}
-	}()
+	return nil
 }
 
-func (h *SchedulerHandler) TerminateJob(connectorID uint64) {
+func (h *SchedulerHandler) TerminateJob(connectorID uint64) error {
+	jobMutex.Lock()
+	defer jobMutex.Unlock()
 
+	if jobID, ok := h.jobMap[connectorID]; ok {
+		h.cronClient.Remove(jobID)
+		delete(h.jobMap, connectorID)
+		return nil
+	}
+
+	return fmt.Errorf("job not found: %d", connectorID)
 }

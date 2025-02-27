@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/robfig/cron/v3"
 	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
@@ -21,6 +22,7 @@ func main() {
 	}
 	defer pgClient.Close()
 
+	cronClient := cron.New(cron.WithSeconds())
 	asynqClient := asynq.NewClient(asynq.RedisFailoverClientOpt{
 		MasterName:    cfg.Redis.MasterName,
 		SentinelAddrs: cfg.Redis.Sentinels,
@@ -30,10 +32,12 @@ func main() {
 	defer asynqClient.Close()
 
 	schedulerRepository := pgrepo.NewSchedulerRepository(pgClient)
-	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository)
-	schedulerHandler := handler.NewSchedulerHandler(asynqClient, schedulerUsecase)
+	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository, asynqClient)
+	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, cronClient)
 
-	go func() {
-		schedulerHandler.CreateNewJob(1, 10*time.Second)
-	}()
+	schedulerHandler.SendSyncMessage(1, 1*time.Second)
+
+	// TODO: Handle error signals
+
+	select {}
 }

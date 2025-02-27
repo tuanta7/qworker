@@ -1,34 +1,44 @@
 package usecase
 
 import (
-	"time"
+	"encoding/json"
+	"fmt"
+	"log"
 
-	"github.com/robfig/cron/v3"
+	"github.com/hibiken/asynq"
+	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 )
 
 type SchedulerUsecase struct {
 	schedulerRepo *pgrepo.SchedulerRepository
+	asynqClient   *asynq.Client
 }
 
-func NewSchedulerUsecase(schedulerRepo *pgrepo.SchedulerRepository) *SchedulerUsecase {
+func NewSchedulerUsecase(schedulerRepo *pgrepo.SchedulerRepository, asynqClient *asynq.Client) *SchedulerUsecase {
 	return &SchedulerUsecase{
 		schedulerRepo: schedulerRepo,
+		asynqClient:   asynqClient,
 	}
 }
 
-func (u *SchedulerUsecase) NewJob(period time.Duration) *cron.Cron {
-	return cron.New(cron.WithSeconds())
-}
+func (u *SchedulerUsecase) SendSyncMessage(connectorID uint64) func() {
+	return func() {
+		message := domain.Message{
+			ConnectorID: connectorID,
+			JobType:     domain.JobTypeIncrementalSync,
+		}
 
-func (u *SchedulerUsecase) TerminateJob(job *cron.Cron) {
-	job.Stop()
-}
+		fmt.Println("Send sync message:", message)
 
-func (u *SchedulerUsecase) NewSyncMessage() []byte {
-	return nil
-}
+		payload, err := json.Marshal(message)
+		if err != nil {
+			log.Printf("Marshal JSON: %v", err)
+		}
 
-func (u *SchedulerUsecase) GetConnectorConfigs() ([]string, error) {
-	return nil, nil
+		task := asynq.NewTask("user:sync", payload)
+		if _, err := u.asynqClient.Enqueue(task); err != nil {
+			log.Printf("Enqueue task: %v", err)
+		}
+	}
 }
