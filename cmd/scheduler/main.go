@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -11,10 +12,12 @@ import (
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/internal/usecase"
 	"github.com/tuanta7/qworker/pkg/db"
+	"github.com/tuanta7/qworker/pkg/logger"
 )
 
 func main() {
 	cfg := config.NewConfig()
+	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
 
 	pgClient, err := db.NewPostgresClient(cfg)
 	if err != nil {
@@ -22,7 +25,6 @@ func main() {
 	}
 	defer pgClient.Close()
 
-	cronClient := cron.New(cron.WithSeconds())
 	asynqClient := asynq.NewClient(asynq.RedisFailoverClientOpt{
 		MasterName:    cfg.Redis.MasterName,
 		SentinelAddrs: cfg.Redis.Sentinels,
@@ -31,13 +33,17 @@ func main() {
 	})
 	defer asynqClient.Close()
 
+	cronClient := cron.New(cron.WithSeconds())
+
 	schedulerRepository := pgrepo.NewSchedulerRepository(pgClient)
-	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository, asynqClient)
-	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, cronClient)
+	schedulerUsecase := usecase.NewSchedulerUsecase(schedulerRepository, zapLogger, asynqClient)
+	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, zapLogger, cronClient)
 
-	schedulerHandler.SendSyncMessage(1, 1*time.Second)
-
-	// TODO: Handle error signals
+	go func() {
+		// Wait for database trigger
+	}()
+	err = schedulerHandler.SendSyncMessage(1, 60*time.Second)
+	fmt.Println(err)
 
 	select {}
 }

@@ -2,48 +2,52 @@ package handler
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
 	"github.com/tuanta7/qworker/internal/usecase"
+	"github.com/tuanta7/qworker/pkg/logger"
 )
 
-var jobMutex sync.Mutex
-
 type SchedulerHandler struct {
+	jobMutex sync.Mutex
+	jobMap   map[uint64]cron.EntryID
+
 	schedulerUC *usecase.SchedulerUsecase
-	jobMap      map[uint64]cron.EntryID
+	logger      *logger.ZapLogger
 	cronClient  *cron.Cron
 }
 
-func NewSchedulerHandler(schedulerUC *usecase.SchedulerUsecase, cronClient *cron.Cron) *SchedulerHandler {
+func NewSchedulerHandler(schedulerUC *usecase.SchedulerUsecase, logger *logger.ZapLogger, cronClient *cron.Cron) *SchedulerHandler {
 	return &SchedulerHandler{
-		schedulerUC: schedulerUC,
-		cronClient:  cronClient,
 		jobMap:      make(map[uint64]cron.EntryID),
+		schedulerUC: schedulerUC,
+		logger:      logger,
+		cronClient:  cronClient,
 	}
 }
 
 func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Duration) error {
-	job := h.schedulerUC.SendSyncMessage(connectorID)
-	jobID, err := h.cronClient.AddFunc(fmt.Sprintf("@every %s", interval), job)
+	jobID, err := h.cronClient.AddFunc(
+		fmt.Sprintf("@every %s", interval.String()),
+		h.schedulerUC.SendSyncMessage(connectorID),
+	)
 	if err != nil {
-		log.Printf("Add cron job: %v", err)
 		return err
 	}
+	h.cronClient.Start()
 
-	jobMutex.Lock()
+	h.jobMutex.Lock()
 	h.jobMap[connectorID] = jobID
-	jobMutex.Unlock()
+	h.jobMutex.Unlock()
 
 	return nil
 }
 
 func (h *SchedulerHandler) TerminateJob(connectorID uint64) error {
-	jobMutex.Lock()
-	defer jobMutex.Unlock()
+	h.jobMutex.Lock()
+	defer h.jobMutex.Unlock()
 
 	if jobID, ok := h.jobMap[connectorID]; ok {
 		h.cronClient.Remove(jobID)

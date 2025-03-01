@@ -14,8 +14,14 @@ type Config struct {
 	ServerName string `envconfig:"SERVER_NAME" default:"worker"`
 	ServerHost string `envconfig:"SERVER_HOST" default:"localhost"`
 	ServerPort uint32 `envconfig:"SERVER_PORT" default:"8080"`
+	Logger     *LoggerConfig
 	Postgres   *PostgresConfig
 	Redis      *RedisConfig
+}
+
+type LoggerConfig struct {
+	Level      string `envconfig:"log_level" default:"info"`
+	LogRequest bool   `envconfig:"log_request" default:"true"`
 }
 
 type PostgresConfig struct {
