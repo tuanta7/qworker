@@ -5,5 +5,7 @@ CREATE TABLE connectors (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE CHANNEL connectors_changes;
+
 CREATE TRIGGER notify_trigger
 AFTER INSERT OR UPDATE OR DELETE ON connectors

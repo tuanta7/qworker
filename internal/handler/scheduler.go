@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"github.com/tuanta7/qworker/internal/usecase"
+	scheduleruc "github.com/tuanta7/qworker/internal/usecase/scheduler"
 	"github.com/tuanta7/qworker/pkg/logger"
 )
 
@@ -14,12 +14,12 @@ type SchedulerHandler struct {
 	jobMutex sync.Mutex
 	jobMap   map[uint64]cron.EntryID
 
-	schedulerUC *usecase.SchedulerUsecase
+	schedulerUC *scheduleruc.UseCase
 	logger      *logger.ZapLogger
 	cronClient  *cron.Cron
 }
 
-func NewSchedulerHandler(schedulerUC *usecase.SchedulerUsecase, logger *logger.ZapLogger, cronClient *cron.Cron) *SchedulerHandler {
+func NewSchedulerHandler(schedulerUC *scheduleruc.UseCase, logger *logger.ZapLogger, cronClient *cron.Cron) *SchedulerHandler {
 	return &SchedulerHandler{
 		jobMap:      make(map[uint64]cron.EntryID),
 		schedulerUC: schedulerUC,
@@ -28,20 +28,37 @@ func NewSchedulerHandler(schedulerUC *usecase.SchedulerUsecase, logger *logger.Z
 	}
 }
 
+func (h *SchedulerHandler) InitScheduledJobs() error {
+	// Load connectors from database
+	// connectors, err := h.schedulerUC.GetConnectors()
+	// if err != nil {
+	// 	return err
+	// }
+
+	// for _, connector := range connectors {
+	// 	err := h.SendSyncMessage()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	return nil
+}
+
 func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Duration) error {
 	jobID, err := h.cronClient.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
-		h.schedulerUC.SendSyncMessage(connectorID),
+		h.schedulerUC.SyncJob(connectorID),
 	)
 	if err != nil {
 		return err
 	}
-	h.cronClient.Start()
 
 	h.jobMutex.Lock()
 	h.jobMap[connectorID] = jobID
 	h.jobMutex.Unlock()
 
+	h.cronClient.Start()
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package usecase
+package scheduleruc
 
 import (
 	"encoding/json"
@@ -10,21 +10,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type SchedulerUsecase struct {
+type UseCase struct {
 	schedulerRepo *pgrepo.SchedulerRepository
 	logger        *logger.ZapLogger
 	asynqClient   *asynq.Client
 }
 
-func NewSchedulerUsecase(schedulerRepo *pgrepo.SchedulerRepository, logger *logger.ZapLogger, asynqClient *asynq.Client) *SchedulerUsecase {
-	return &SchedulerUsecase{
+func NewSchedulerUsecase(schedulerRepo *pgrepo.SchedulerRepository, logger *logger.ZapLogger, asynqClient *asynq.Client) *UseCase {
+	return &UseCase{
 		schedulerRepo: schedulerRepo,
 		logger:        logger,
 		asynqClient:   asynqClient,
 	}
 }
 
-func (u *SchedulerUsecase) SendSyncMessage(connectorID uint64) func() {
+func (u *UseCase) SyncJob(connectorID uint64) func() {
 	return func() {
 		u.logger.Info("SchedulerUsecase - SendSyncMessage")
 
