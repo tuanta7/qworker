@@ -1,3 +1,3 @@
-package scheduleruc
+package workeruc
 
 type Repository interface{}

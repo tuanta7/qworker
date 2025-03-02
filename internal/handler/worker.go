@@ -4,20 +4,24 @@ import (
 	"context"
 
 	"github.com/hibiken/asynq"
+	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type WorkerHandler struct {
-	logger *logger.ZapLogger
+	workerUC *workeruc.UseCase
+	logger   *logger.ZapLogger
 }
 
-func NewWorkerHandler(logger *logger.ZapLogger) *WorkerHandler {
+func NewWorkerHandler(workerUC *workeruc.UseCase, logger *logger.ZapLogger) *WorkerHandler {
 	return &WorkerHandler{
-		logger: logger,
+		workerUC: workerUC,
+		logger:   logger,
 	}
 }
 
 func (h *WorkerHandler) HandleUserSync(ctx context.Context, task *asynq.Task) error {
-	h.logger.Info("WorkerHandler - HandleUserSync")
+	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task))
 	return nil
 }

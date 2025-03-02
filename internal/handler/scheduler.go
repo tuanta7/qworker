@@ -51,7 +51,7 @@ func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Dur
 
 	jobID, err := h.cronClient.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
-		h.schedulerUC.SyncJob(connectorID),
+		h.schedulerUC.SendSyncJob(connectorID),
 	)
 	if err != nil {
 		return err

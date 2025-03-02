@@ -7,6 +7,8 @@ import (
 	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/domain"
 	"github.com/tuanta7/qworker/internal/handler"
+	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
+	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/db"
 	"github.com/tuanta7/qworker/pkg/logger"
 )
@@ -17,11 +19,12 @@ func main() {
 
 	pgClient, err := db.NewPostgresClient(cfg)
 	if err != nil {
-		log.Fatalf("Postgres: %v", err)
+		log.Fatalf("db.NewPostgresClient: %v", err)
 	}
 	defer pgClient.Close()
 
-	workerHandler := handler.NewWorkerHandler(zapLogger)
+	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
+	workerUseCase := workeruc.NewUseCase(connectorRepository, zapLogger)
 
 	srv := asynq.NewServer(
 		asynq.RedisFailoverClientOpt{
@@ -29,18 +32,26 @@ func main() {
 			SentinelAddrs: cfg.Redis.Sentinels,
 			Password:      cfg.Redis.Password,
 			DB:            cfg.Redis.Database,
-		}, asynq.Config{
+		},
+		asynq.Config{
 			Concurrency: 10,
 			Queues: map[string]int{
-				"default":  1,
-				"critical": 5,
+				domain.IncrementalSyncJobQueue: 1,
+				domain.FullSyncJobQueue:        5,
 			},
 		})
 
-	mux := asynq.NewServeMux()
-	mux.HandleFunc(domain.SyncJobQueueName, workerHandler.HandleUserSync)
-
+	mux := NewRouter(cfg, zapLogger, workerUseCase)
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("Asynq server stopped: %v", err)
 	}
+}
+
+func NewRouter(cfg *config.Config, zl *logger.ZapLogger, workerUC *workeruc.UseCase) *asynq.ServeMux {
+	workerHandler := handler.NewWorkerHandler(workerUC, zl)
+
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(domain.IncrementalSyncJobQueue, workerHandler.HandleUserSync)
+	mux.HandleFunc(domain.FullSyncJobQueue, workerHandler.HandleUserSync)
+	return mux
 }

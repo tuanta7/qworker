@@ -1,9 +1,8 @@
 package scheduleruc
 
 import (
-	"encoding/json"
+	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
 
-	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/pkg/logger"
@@ -11,49 +10,44 @@ import (
 )
 
 type UseCase struct {
-	schedulerRepo *pgrepo.SchedulerRepository
+	schedulerRepo *pgrepo.ConnectorRepository
+	jobRepo       *redisrepo.JobRepository
 	logger        *logger.ZapLogger
-	asynqClient   *asynq.Client
 }
 
-func NewSchedulerUsecase(schedulerRepo *pgrepo.SchedulerRepository, logger *logger.ZapLogger, asynqClient *asynq.Client) *UseCase {
+func NewUseCase(
+	schedulerRepo *pgrepo.ConnectorRepository,
+	jobRepo *redisrepo.JobRepository,
+	logger *logger.ZapLogger,
+) *UseCase {
 	return &UseCase{
 		schedulerRepo: schedulerRepo,
+		jobRepo:       jobRepo,
 		logger:        logger,
-		asynqClient:   asynqClient,
 	}
 }
 
-func (u *UseCase) SyncJob(connectorID uint64) func() {
-	return func() {
-		u.logger.Info("SchedulerUsecase - SendSyncMessage")
+func (u *UseCase) GetEnabledConnectors() {}
 
+func (u *UseCase) SendSyncJob(connectorID uint64) func() {
+	return func() {
 		message := domain.Message{
 			ConnectorID: connectorID,
 			JobType:     domain.JobTypeIncrementalSync,
 		}
 
-		payload, err := json.Marshal(message)
+		task, err := u.jobRepo.Enqueue(domain.IncrementalSyncJobQueue, message)
 		if err != nil {
 			u.logger.Error(
-				"SchedulerUsecase -  SendSyncMessage - json.Marshal",
-				zap.Error(err),
-				zap.Uint64("connector_id", connectorID),
-			)
-		}
-
-		info, err := u.asynqClient.Enqueue(asynq.NewTask(domain.SyncJobQueueName, payload))
-		if err != nil {
-			u.logger.Error(
-				"SchedulerUsecase - SendSyncMessage - asynqClient.Enqueue",
+				"SchedulerUsecase -  SendSyncMessage - u.jobRepo.Enqueue",
 				zap.Error(err),
 				zap.Uint64("connector_id", connectorID),
 			)
 		}
 
 		u.logger.Info(
-			"SchedulerUsecase - SendSyncMessage",
-			zap.Any("info", info),
+			"SchedulerUsecase - SendSyncMessage - OK",
+			zap.Any("task", task),
 		)
 	}
 }

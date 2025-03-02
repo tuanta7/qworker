@@ -9,7 +9,7 @@ import (
 type Connector struct {
 	ConnectorID   uint64         `json:"connector_id"`
 	ConnectorType string         `json:"connector_type"`
-	ConnectorName string         `json:"connector_name"`
+	DisplayName   string         `json:"display_name"`
 	LastSync      time.Time      `json:"last_sync"`
 	Enabled       bool           `json:"enabled"`
 	Data          sqlxx.TextData `json:"data"`

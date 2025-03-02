@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
 	"log"
 
 	"github.com/hibiken/asynq"
@@ -22,7 +23,7 @@ func main() {
 
 	pgClient, err := db.NewPostgresClient(cfg)
 	if err != nil {
-		log.Fatalf("postgresql: %v", err)
+		log.Fatalf("db.NewPostgresClient: %v", err)
 	}
 	defer pgClient.Close()
 
@@ -36,11 +37,17 @@ func main() {
 
 	cronClient := cron.New(cron.WithSeconds())
 
-	schedulerRepository := pgrepo.NewSchedulerRepository(pgClient)
-	schedulerUsecase := scheduleruc.NewSchedulerUsecase(schedulerRepository, zapLogger, asynqClient)
+	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
+	jobRepository := redisrepo.NewJobRepository(asynqClient)
+	schedulerUsecase := scheduleruc.NewUseCase(connectorRepository, jobRepository, zapLogger)
 	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, zapLogger, cronClient)
 
-	schedulerHandler.InitScheduledJobs()
+	err = schedulerHandler.InitScheduledJobs()
+	if err != nil {
+		log.Fatalf("schedulerHandler.InitScheduledJobs(): %v", err)
+	}
+
+	// Listen for database changes
 	go listen(ctx, pgClient, zapLogger)
 
 	// Block the main goroutine with an empty select statement
@@ -69,7 +76,7 @@ func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.
 		return
 	}
 	defer func() {
-		conn.Exec(ctx, "UNLISTEN connectors_changes")
+		_, _ = conn.Exec(ctx, "UNLISTEN connectors_changes")
 		conn.Release()
 	}()
 
