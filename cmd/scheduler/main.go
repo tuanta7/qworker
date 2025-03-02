@@ -9,21 +9,20 @@ import (
 	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
-	scheduleruc "github.com/tuanta7/qworker/internal/usecase/scheduler"
+	scheduleruc "github.com/tuanta7/qworker/internal/scheduler"
 	"github.com/tuanta7/qworker/pkg/db"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
 )
 
 func main() {
+	ctx := context.Background()
 	cfg := config.NewConfig()
 	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
 
-	ctx := context.Background()
-
 	pgClient, err := db.NewPostgresClient(cfg)
 	if err != nil {
-		log.Fatalf("Postgres: %v", err)
+		log.Fatalf("postgresql: %v", err)
 	}
 	defer pgClient.Close()
 
@@ -42,14 +41,14 @@ func main() {
 	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, zapLogger, cronClient)
 
 	schedulerHandler.InitScheduledJobs()
-	go Listen(ctx, pgClient, zapLogger)
+	go listen(ctx, pgClient, zapLogger)
 
 	// Block the main goroutine with an empty select statement
 	// to allow other goroutines to run
 	select {}
 }
 
-func Listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.ZapLogger) {
+func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.ZapLogger) {
 	// Get a connection from the pool and never release it
 	conn, err := pgClient.Pool.Acquire(ctx)
 	if err != nil {

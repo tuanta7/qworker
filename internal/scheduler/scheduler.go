@@ -42,7 +42,7 @@ func (u *UseCase) SyncJob(connectorID uint64) func() {
 			)
 		}
 
-		info, err := u.asynqClient.Enqueue(asynq.NewTask("user:sync", payload))
+		info, err := u.asynqClient.Enqueue(asynq.NewTask(domain.SyncJobQueueName, payload))
 		if err != nil {
 			u.logger.Error(
 				"SchedulerUsecase - SendSyncMessage - asynqClient.Enqueue",

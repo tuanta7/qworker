@@ -1,2 +1,11 @@
-DROP TABLE IF EXISTS connectors;
-DROP TRIGGER IF EXISTS notify_trigger ON connectors;
+CREATE TABLE connectors (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE CHANNEL connectors_changes;
+
+CREATE TRIGGER notify_trigger
+AFTER INSERT OR UPDATE OR DELETE ON connectors

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	scheduleruc "github.com/tuanta7/qworker/internal/usecase/scheduler"
+	scheduleruc "github.com/tuanta7/qworker/internal/scheduler"
 	"github.com/tuanta7/qworker/pkg/logger"
 )
 
@@ -46,6 +46,9 @@ func (h *SchedulerHandler) InitScheduledJobs() error {
 }
 
 func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Duration) error {
+	h.jobMutex.Lock()
+	defer h.jobMutex.Unlock()
+
 	jobID, err := h.cronClient.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
 		h.schedulerUC.SyncJob(connectorID),
@@ -54,10 +57,7 @@ func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Dur
 		return err
 	}
 
-	h.jobMutex.Lock()
 	h.jobMap[connectorID] = jobID
-	h.jobMutex.Unlock()
-
 	h.cronClient.Start()
 	return nil
 }
