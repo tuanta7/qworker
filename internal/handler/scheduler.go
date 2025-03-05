@@ -16,15 +16,15 @@ type SchedulerHandler struct {
 
 	schedulerUC *scheduleruc.UseCase
 	logger      *logger.ZapLogger
-	cronClient  *cron.Cron
+	cr  *cron.Cron
 }
 
-func NewSchedulerHandler(schedulerUC *scheduleruc.UseCase, logger *logger.ZapLogger, cronClient *cron.Cron) *SchedulerHandler {
+func NewSchedulerHandler(schedulerUC *scheduleruc.UseCase, logger *logger.ZapLogger) *SchedulerHandler {
 	return &SchedulerHandler{
 		jobMap:      make(map[uint64]cron.EntryID),
 		schedulerUC: schedulerUC,
 		logger:      logger,
-		cronClient:  cronClient,
+		cr:  cron.New(cron.WithSeconds()),
 	}
 }
 
@@ -49,7 +49,7 @@ func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Dur
 	h.jobMutex.Lock()
 	defer h.jobMutex.Unlock()
 
-	jobID, err := h.cronClient.AddFunc(
+	jobID, err := h.cr.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
 		h.schedulerUC.SendSyncJob(connectorID),
 	)
@@ -67,7 +67,7 @@ func (h *SchedulerHandler) TerminateJob(connectorID uint64) error {
 	defer h.jobMutex.Unlock()
 
 	if jobID, ok := h.jobMap[connectorID]; ok {
-		h.cronClient.Remove(jobID)
+		h.cr.Remove(jobID)
 		delete(h.jobMap, connectorID)
 		return nil
 	}

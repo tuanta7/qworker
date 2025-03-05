@@ -35,12 +35,10 @@ func main() {
 	})
 	defer asynqClient.Close()
 
-	cronClient := cron.New(cron.WithSeconds())
-
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
 	jobRepository := redisrepo.NewJobRepository(asynqClient)
 	schedulerUsecase := scheduleruc.NewUseCase(connectorRepository, jobRepository, zapLogger)
-	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, zapLogger, cronClient)
+	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, zapLogger)
 
 	err = schedulerHandler.InitScheduledJobs()
 	if err != nil {

@@ -13,16 +13,6 @@ func NewJobRepository(client *asynq.Client) *JobRepository {
 	return &JobRepository{client}
 }
 
-func (r *JobRepository) Enqueue(queueName string, message any) (*asynq.TaskInfo, error) {
-	payload, err := json.Marshal(message)
-	if err != nil {
-		return nil, err
-	}
-
-	info, err := r.client.Enqueue(asynq.NewTask(queueName, payload))
-	if err != nil {
-		return nil, err
-	}
-
-	return info, nil
+func (r *JobRepository) Enqueue(task *asynq.Task) (*asynq.TaskInfo, error) {
+	return r.client.Enqueue(task)
 }

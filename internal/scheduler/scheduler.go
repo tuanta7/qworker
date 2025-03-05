@@ -36,7 +36,12 @@ func (u *UseCase) SendSyncJob(connectorID uint64) func() {
 			JobType:     domain.JobTypeIncrementalSync,
 		}
 
-		task, err := u.jobRepo.Enqueue(domain.IncrementalSyncJobQueue, message)
+		payload, err := json.Marshal(message)
+		if err != nil {
+			return nil, err
+		}
+
+		task, err := u.jobRepo.Enqueue(asynq.NewTask(payload, domain.IncrementalSyncJobQueue))
 		if err != nil {
 			u.logger.Error(
 				"SchedulerUsecase -  SendSyncMessage - u.jobRepo.Enqueue",
