@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/hibiken/asynq"
-	"github.com/robfig/cron/v3"
 	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"

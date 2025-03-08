@@ -10,9 +10,9 @@ CREATE TABLE connectors (
 CREATE CHANNEL connectors_changes;
 
 CREATE TRIGGER notify_connector_changes
-AFTER INSERT OR UPDATE OR DELETE ON connectors
-FOR EACH ROW
-EXECUTE PROCEDURE pg_notify('connectors_changes', json_build_object(
+AFTER INSERT OR UPDATE OR DELETE
+ON connectors
+FOR EACH ROW EXECUTE PROCEDURE pg_notify('connectors_changes', json_build_object(
   'table', TG_TABLE_NAME,
   'action', TG_OP,
   'id', NEW.id

@@ -11,20 +11,20 @@ import (
 )
 
 type SchedulerHandler struct {
-	jobMutex sync.Mutex
-	jobMap   map[uint64]cron.EntryID
+	lock sync.Mutex
+	jobs map[uint64]cron.EntryID
 
 	schedulerUC *scheduleruc.UseCase
 	logger      *logger.ZapLogger
-	cr  *cron.Cron
+	scheduler   *cron.Cron
 }
 
 func NewSchedulerHandler(schedulerUC *scheduleruc.UseCase, logger *logger.ZapLogger) *SchedulerHandler {
 	return &SchedulerHandler{
-		jobMap:      make(map[uint64]cron.EntryID),
+		jobs:        make(map[uint64]cron.EntryID),
 		schedulerUC: schedulerUC,
 		logger:      logger,
-		cr:  cron.New(cron.WithSeconds()),
+		scheduler:   cron.New(cron.WithSeconds()),
 	}
 }
 
@@ -46,10 +46,10 @@ func (h *SchedulerHandler) InitScheduledJobs() error {
 }
 
 func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Duration) error {
-	h.jobMutex.Lock()
-	defer h.jobMutex.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
-	jobID, err := h.cr.AddFunc(
+	jobID, err := h.scheduler.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
 		h.schedulerUC.SendSyncJob(connectorID),
 	)
@@ -57,18 +57,18 @@ func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Dur
 		return err
 	}
 
-	h.jobMap[connectorID] = jobID
-	h.cronClient.Start()
+	h.jobs[connectorID] = jobID
+	h.scheduler.Start()
 	return nil
 }
 
 func (h *SchedulerHandler) TerminateJob(connectorID uint64) error {
-	h.jobMutex.Lock()
-	defer h.jobMutex.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
-	if jobID, ok := h.jobMap[connectorID]; ok {
-		h.cr.Remove(jobID)
-		delete(h.jobMap, connectorID)
+	if jobID, ok := h.jobs[connectorID]; ok {
+		h.scheduler.Remove(jobID)
+		delete(h.jobs, connectorID)
 		return nil
 	}
 
