@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
 	"log"
+	"strings"
 
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
@@ -53,7 +55,6 @@ func main() {
 }
 
 func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.ZapLogger) {
-	// Get a connection from the pool and never release it
 	conn, err := pgClient.Pool.Acquire(ctx)
 	if err != nil {
 		zapLogger.Error(
@@ -63,7 +64,6 @@ func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.
 		return
 	}
 
-	// Listen for notifications on the "connectors_changes" channel
 	_, err = conn.Exec(ctx, "LISTEN connectors_changes")
 	if err != nil {
 		zapLogger.Error(
@@ -77,7 +77,6 @@ func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.
 		conn.Release()
 	}()
 
-	// Wait for notifications in an infinite loop
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
@@ -85,21 +84,32 @@ func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.
 			return
 		}
 
+		zapLogger.Info("received notification", zap.Any("payload", notification.Payload))
+
 		if notification.Channel != "connectors_changes" {
 			continue
 		}
 
-		switch notification.Payload {
+		message := &struct {
+			Table       string `json:"table"`
+			Action      string `json:"action"`
+			ConnectorID uint64 `json:"connector_id"`
+		}{}
+
+		err = json.Unmarshal([]byte(notification.Payload), message)
+		if err != nil {
+			zapLogger.Error("failed to unmarshal notification", zap.Error(err))
+		}
+
+		switch strings.ToLower(message.Action) {
 		case "insert":
-			// Handle insert event
+			zapLogger.Info("Inserted")
 		case "update":
 			// Handle update event
 		case "delete":
-			// Handle delete event
+			zapLogger.Info("Deleted")
 		default:
 			zapLogger.Warn("unknown notification payload")
 		}
-
-		zapLogger.Info("received notification", zap.Any("payload", notification.Payload))
 	}
 }

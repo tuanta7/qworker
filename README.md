@@ -45,7 +45,7 @@ Redis Sentinel is a distributed system, it provides high availability for Redis 
 #### Trigger Function
 
 - A function with RETURNS TRIGGER must be called by a CREATE TRIGGER statement.
-- `pg_notify()` can be used in a trigger
+- `pg_notify()` can not be used in a trigger because it does not return a trigger 
 
 #### Row Variables inside Trigger function
 

@@ -19,8 +19,8 @@ func NewJobRepository(asynqClient *asynq.Client) *JobRepository {
 
 func (r *JobRepository) Enqueue(task *asynq.Task) (*asynq.TaskInfo, error) {
 	opts := []asynq.Option{
-		asynq.MaxRetry(5),
-		asynq.Retention(5 * time.Minute),
+		asynq.MaxRetry(1),
+		asynq.Retention(5 * time.Minute), // stored as completed task for 5min
 	}
 
 	return r.asynqClient.Enqueue(task, opts...)

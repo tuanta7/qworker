@@ -1,9 +1,9 @@
 package scheduleruc
 
 import (
+	"github.com/hibiken/asynq"
 	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
 
-	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
@@ -29,24 +29,14 @@ func NewUseCase(
 
 func (u *UseCase) GetEnabledConnectors() {}
 
-func (u *UseCase) SendSyncJob(connectorID uint64) func() {
+func (u *UseCase) EnqueueTask(task *asynq.Task) func() {
 	return func() {
-		message := domain.Message{
-			ConnectorID: connectorID,
-			JobType:     domain.JobTypeIncrementalSync,
-		}
-
-		payload, err := json.Marshal(message)
-		if err != nil {
-			return nil, err
-		}
-
-		task, err := u.jobRepo.Enqueue(asynq.NewTask(payload, domain.IncrementalSyncJobQueue))
+		task, err := u.jobRepo.Enqueue(task)
 		if err != nil {
 			u.logger.Error(
 				"SchedulerUsecase -  SendSyncMessage - u.jobRepo.Enqueue",
 				zap.Error(err),
-				zap.Uint64("connector_id", connectorID),
+				zap.Any("task", task.Payload),
 			)
 		}
 

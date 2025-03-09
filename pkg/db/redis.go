@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/tuanta7/qworker/config"
@@ -21,7 +22,7 @@ func NewRedisSentinelClient(cfg *config.Config) (*RedisClient, error) {
 
 	ctx := context.Background()
 
-	err := c.Set(ctx, "key", "value", 0).Err()
+	err := c.Set(ctx, "key", "value", time.Minute).Err()
 	if err != nil {
 		return nil, err
 	}

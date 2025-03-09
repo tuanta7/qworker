@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/hibiken/asynq"
+	"github.com/tuanta7/qworker/internal/domain"
 	"sync"
 	"time"
 
@@ -49,9 +52,19 @@ func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Dur
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	message := domain.Message{
+		ConnectorID: connectorID,
+		JobType:     domain.JobTypeIncrementalSync,
+	}
+
+	payload, err := json.Marshal(message)
+	if err != nil {
+
+	}
+
 	jobID, err := h.scheduler.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
-		h.schedulerUC.SendSyncJob(connectorID),
+		h.schedulerUC.EnqueueTask(asynq.NewTask(domain.IncrementalSyncJobQueue, payload)),
 	)
 	if err != nil {
 		return err
