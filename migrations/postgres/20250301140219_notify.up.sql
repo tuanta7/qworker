@@ -3,12 +3,12 @@ CREATE TABLE connectors
     id             SERIAL PRIMARY KEY,
     connector_type VARCHAR(255) NOT NULL,
     display_name   VARCHAR(255) NOT NULL,
-    enabled        BOOLEAN DEFAULT false,
+    enabled        BOOLEAN               DEFAULT false,
     last_sync      TIMESTAMP,
     data           TEXT,
-    created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at     TIMESTAMP NOT NULL DEFAULT NOW()
-
+    created_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMP    NOT NULL DEFAULT NOW()
+);
 
 CREATE FUNCTION notify_connector_changes() RETURNS TRIGGER AS
 $$
