@@ -8,7 +8,6 @@ import (
 
 type JobRepository struct {
 	asynqClient *asynq.Client
-	*db.RedisClient
 }
 
 func NewJobRepository(asynqClient *asynq.Client) *JobRepository {

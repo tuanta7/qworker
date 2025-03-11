@@ -21,7 +21,19 @@ func NewWorkerHandler(workerUC *workeruc.UseCase, logger *logger.ZapLogger) *Wor
 	}
 }
 
-func (h *WorkerHandler) HandleUserSync(ctx context.Context, task *asynq.Task) error {
+func (h *WorkerHandler) HandleTerminateSync(ctx context.Context, task *asynq.Task) error {
 	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task))
+	return nil
+}
+
+func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asynq.Task) error {
+	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task))
+	return nil
+}
+
+func (h *WorkerHandler) HandleUserFullSync(ctx context.Context, task *asynq.Task) error {
+	h.logger.Info("WorkerHandler - HandleUserFullSync", zap.Any("task", task))
+	// Check if any Full/Incremental Sync Job is running
+	// Skip if there is a full sync job still running, override if Incr. Sync
 	return nil
 }

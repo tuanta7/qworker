@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hibiken/asynq"
+	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/domain"
 	"sync"
 	"time"
@@ -64,7 +65,7 @@ func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Dur
 
 	jobID, err := h.scheduler.AddFunc(
 		fmt.Sprintf("@every %s", interval.String()),
-		h.schedulerUC.EnqueueTask(asynq.NewTask(domain.IncrementalSyncJobQueue, payload)),
+		h.schedulerUC.EnqueueTask(asynq.NewTask(config.IncrementalSyncQueue, payload)),
 	)
 	if err != nil {
 		return err
