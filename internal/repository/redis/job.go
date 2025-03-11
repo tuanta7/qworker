@@ -2,13 +2,11 @@ package redisrepo
 
 import (
 	"github.com/hibiken/asynq"
-	"github.com/tuanta7/qworker/pkg/db"
 	"time"
 )
 
 type JobRepository struct {
 	asynqClient *asynq.Client
-	*db.RedisClient
 }
 
 func NewJobRepository(asynqClient *asynq.Client) *JobRepository {
