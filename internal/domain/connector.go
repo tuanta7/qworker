@@ -33,3 +33,29 @@ type SyncSettings struct {
 	Incremental bool          `json:"incremental"`
 	Period      time.Duration `json:"period"`
 }
+
+const (
+	TableConnectors  = "connectors"
+	ColConnectorID   = "connector_id"
+	ColConnectorType = "connector_type"
+	ColDisplayName   = "display_name"
+	ColEnabled       = "enabled"
+	ColLastSync      = "last_sync"
+
+	ColData      = "data"
+	ColCreatedAt = "created_at"
+	ColUpdatedAt = "updated_at"
+)
+
+var (
+	AllConnectorCols = []string{
+		ColConnectorID,
+		ColConnectorType,
+		ColDisplayName,
+		ColEnabled,
+		ColLastSync,
+		ColData,
+		ColCreatedAt,
+		ColUpdatedAt,
+	}
+)

@@ -7,6 +7,7 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/tuanta7/qworker/internal/domain"
 	"github.com/tuanta7/qworker/pkg/db"
+	"github.com/tuanta7/qworker/pkg/utils"
 )
 
 type ConnectorRepository struct {
@@ -79,7 +80,7 @@ func (r *ConnectorRepository) Get(ctx context.Context, id uint64) (*domain.Conne
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, domain.ErrConnectorNotFound
+			return nil, utils.ErrConnectorNotFound
 		}
 		return nil, err
 	}
@@ -87,11 +88,11 @@ func (r *ConnectorRepository) Get(ctx context.Context, id uint64) (*domain.Conne
 	return c, nil
 }
 
-func (r *ConnectorRepository) ListEnabled(ctx context.Context) ([]*domain.Connector, error) {
+func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) ([]*domain.Connector, error) {
 	query, args, err := r.PostgresClient.Builder.
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnectors).
-		Where(squirrel.Eq{domain.ColEnabled: true}).
+		Where(squirrel.Eq{domain.ColEnabled: enabled}).
 		ToSql()
 	if err != nil {
 		return nil, err

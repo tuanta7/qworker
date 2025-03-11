@@ -5,7 +5,6 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
-	"github.com/tuanta7/qworker/internal/domain"
 	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
@@ -36,14 +35,15 @@ func main() {
 		asynq.Config{
 			Concurrency: 10,
 			Queues: map[string]int{
-				domain.IncrementalSyncJobQueue: 1,
-				domain.FullSyncJobQueue:        5,
+				config.TerminateQueue:       6,
+				config.FullSyncQueue:        3,
+				config.IncrementalSyncQueue: 1,
 			},
 		})
 
 	mux := NewRouter(cfg, zapLogger, workerUseCase)
 	if err := srv.Run(mux); err != nil {
-		log.Fatalf("Asynq server stopped: %v", err)
+		log.Fatalf("asynq server stopped: %v", err)
 	}
 }
 
@@ -51,7 +51,9 @@ func NewRouter(cfg *config.Config, zl *logger.ZapLogger, workerUC *workeruc.UseC
 	workerHandler := handler.NewWorkerHandler(workerUC, zl)
 
 	mux := asynq.NewServeMux()
-	mux.HandleFunc(domain.IncrementalSyncJobQueue, workerHandler.HandleUserSync)
-	mux.HandleFunc(domain.FullSyncJobQueue, workerHandler.HandleUserSync)
+	mux.HandleFunc(config.TerminateQueue, workerHandler.HandleTerminateSync)
+	mux.HandleFunc(config.FullSyncQueue, workerHandler.HandleUserFullSync)
+	mux.HandleFunc(config.IncrementalSyncQueue, workerHandler.HandleUserIncrementalSync)
+
 	return mux
 }

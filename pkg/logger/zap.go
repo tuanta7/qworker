@@ -58,10 +58,12 @@ func NewLogger(logLevel string) (*ZapLogger, error) {
 	default:
 		return nil, fmt.Errorf("unknown logger level: %s", logLevel)
 	}
+
 	encoderCfg := zap.NewProductionEncoderConfig()
 	encoderCfg.TimeKey = "timestamp"
 	encoderCfg.MessageKey = "message"
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
 	config := zap.Config{
 		Level:             zap.NewAtomicLevelAt(level),
 		Development:       false,
