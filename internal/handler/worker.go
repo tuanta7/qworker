@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
+	"github.com/tuanta7/qworker/internal/domain"
 
 	"github.com/hibiken/asynq"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
@@ -25,7 +27,18 @@ func NewWorkerHandler(workerUC *workeruc.UseCase, connectorUC *connectoruc.UseCa
 }
 
 func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asynq.Task) error {
-	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task.Payload()))
+	message := domain.Message{}
+	err := json.Unmarshal(task.Payload(), &message)
+	if err != nil {
+		return err
+	}
+
+	err = h.workerUC.RunTask(ctx, message)
+	if err != nil {
+		return err
+	}
+
+	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", message))
 	return nil
 }
 

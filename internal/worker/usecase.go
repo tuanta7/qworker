@@ -26,19 +26,19 @@ func NewUseCase(connectorRepository *pgrepo.ConnectorRepository, zl *logger.ZapL
 	}
 }
 
-func (u *UseCase) GetJob(connectorID uint64) (*domain.Task, error) {
+func (u *UseCase) GetTask(connectorID uint64) (*domain.Task, error) {
 	u.lock.Lock()
-	job, exist := u.runningTask[connectorID]
+	task, exist := u.runningTask[connectorID]
 	u.lock.Unlock()
 
 	if exist {
-		return job, nil
+		return task, nil
 	}
 
 	return nil, utils.ErrJobNotFound
 }
 
-func (u *UseCase) RunJob(ctx context.Context, message domain.Message) error {
+func (u *UseCase) RunTask(ctx context.Context, message domain.Message) error {
 	c, cancel := context.WithCancel(ctx)
 
 	u.lock.Lock()
@@ -69,7 +69,7 @@ func (u *UseCase) RunJob(ctx context.Context, message domain.Message) error {
 	}
 }
 
-func (u *UseCase) CancelJob(connectorID uint64) {
+func (u *UseCase) TerminateTask(connectorID uint64) {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
@@ -89,7 +89,6 @@ func (u *UseCase) sync(message domain.Message) error {
 	switch message.TaskType {
 	case domain.TaskTypeIncrementalSync:
 		if exists {
-			// Ignore
 			return nil
 		}
 		// Run Incremental Sync
@@ -100,8 +99,10 @@ func (u *UseCase) sync(message domain.Message) error {
 		}
 		return nil
 	case domain.TaskTypeTerminate:
-		u.CancelJob(message.ConnectorID)
+		u.TerminateTask(message.ConnectorID)
 	}
 
 	return nil
 }
+
+func (u *UseCase) incrementalSync() {}

@@ -18,9 +18,9 @@ func NewRouter(
 	workerHandler := handler.NewWorkerHandler(workerUC, connectorUC, zl)
 
 	mux := asynq.NewServeMux()
-	mux.HandleFunc(config.TerminateQueue, workerHandler.HandleTerminateSync)
-	mux.HandleFunc(config.FullSyncQueue, workerHandler.HandleUserFullSync)
 	mux.HandleFunc(config.IncrementalSyncQueue, workerHandler.HandleUserIncrementalSync)
+	mux.HandleFunc(config.FullSyncQueue, workerHandler.HandleUserFullSync)
+	mux.HandleFunc(config.TerminateQueue, workerHandler.HandleTerminateSync)
 
 	return mux
 }
