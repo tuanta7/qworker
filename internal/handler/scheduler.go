@@ -1,90 +1,130 @@
 package handler
 
 import (
-	"encoding/json"
-	"fmt"
-	"github.com/hibiken/asynq"
+	"context"
 	"github.com/tuanta7/qworker/config"
+	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/domain"
-	"sync"
-	"time"
-
-	"github.com/robfig/cron/v3"
 	scheduleruc "github.com/tuanta7/qworker/internal/scheduler"
-	"github.com/tuanta7/qworker/pkg/logger"
 )
 
 type SchedulerHandler struct {
-	lock sync.Mutex
-	jobs map[uint64]cron.EntryID
-
+	cfg         *config.Config
 	schedulerUC *scheduleruc.UseCase
-	logger      *logger.ZapLogger
-	scheduler   *cron.Cron
+	connectorUC *connectoruc.UseCase
 }
 
-func NewSchedulerHandler(schedulerUC *scheduleruc.UseCase, logger *logger.ZapLogger) *SchedulerHandler {
+func NewSchedulerHandler(
+	cfg *config.Config,
+	schedulerUC *scheduleruc.UseCase,
+	connectorUC *connectoruc.UseCase,
+) *SchedulerHandler {
 	return &SchedulerHandler{
-		jobs:        make(map[uint64]cron.EntryID),
+		cfg:         cfg,
 		schedulerUC: schedulerUC,
-		logger:      logger,
-		scheduler:   cron.New(cron.WithSeconds()),
+		connectorUC: connectorUC,
 	}
 }
 
-func (h *SchedulerHandler) InitScheduledJobs() error {
-	// Load connectors from database
-	// connectors, err := h.schedulerUC.GetConnectors()
-	// if err != nil {
-	// 	return err
-	// }
-
-	// for _, connector := range connectors {
-	// 	err := h.SendSyncMessage()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
-
-	return nil
-}
-
-func (h *SchedulerHandler) SendSyncMessage(connectorID uint64, interval time.Duration) error {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	message := domain.Message{
-		ConnectorID: connectorID,
-		JobType:     domain.JobTypeIncrementalSync,
+func (h *SchedulerHandler) HandleInsertConnector(ctx context.Context, connectorID uint64) error {
+	connector, err := h.connectorUC.GetByID(ctx, connectorID)
+	if err != nil || !connector.Enabled {
+		return err
 	}
 
-	payload, err := json.Marshal(message)
-	if err != nil {
-
+	settings, err := connector.GetSyncSettings()
+	if err != nil || !settings.IncSync {
+		return err
 	}
 
-	jobID, err := h.scheduler.AddFunc(
-		fmt.Sprintf("@every %s", interval.String()),
-		h.schedulerUC.EnqueueTask(asynq.NewTask(config.IncrementalSyncQueue, payload)),
-	)
+	message := &domain.Message{
+		ConnectorID: connector.ConnectorID,
+		TaskType:    domain.TaskTypeIncrementalSync,
+	}
+
+	err = h.schedulerUC.CreateJob(message, settings.IncSyncPeriod, config.IncrementalSyncQueue)
 	if err != nil {
 		return err
 	}
 
-	h.jobs[connectorID] = jobID
-	h.scheduler.Start()
+	h.schedulerUC.StartScheduler()
 	return nil
 }
 
-func (h *SchedulerHandler) TerminateJob(connectorID uint64) error {
-	h.lock.Lock()
-	defer h.lock.Unlock()
+func (h *SchedulerHandler) HandleUpdateConnector(ctx context.Context, connectorID uint64) error {
+	connector, err := h.connectorUC.GetByID(ctx, connectorID)
+	if err != nil {
+		return err
+	}
 
-	if jobID, ok := h.jobs[connectorID]; ok {
-		h.scheduler.Remove(jobID)
-		delete(h.jobs, connectorID)
+	if !connector.Enabled {
+		h.schedulerUC.RemoveJob(connectorID)
 		return nil
 	}
 
-	return fmt.Errorf("job not found: %d", connectorID)
+	settings, err := connector.GetSyncSettings()
+	if err != nil {
+		return err
+	}
+
+	if !settings.IncSync {
+		h.schedulerUC.RemoveJob(connectorID)
+		return nil
+	}
+
+	currentPeriod, exists := h.schedulerUC.GetJobPeriod(connectorID)
+	if exists {
+		if currentPeriod == settings.IncSyncPeriod {
+			return nil
+		}
+		h.schedulerUC.RemoveJob(connectorID)
+	}
+
+	message := &domain.Message{
+		ConnectorID: connector.ConnectorID,
+		TaskType:    domain.TaskTypeIncrementalSync,
+	}
+
+	err = h.schedulerUC.CreateJob(message, settings.IncSyncPeriod, config.IncrementalSyncQueue)
+	if err != nil {
+		return err
+	}
+
+	h.schedulerUC.StartScheduler()
+	return nil
+}
+
+func (h *SchedulerHandler) HandleDeleteConnector(ctx context.Context, connectorID uint64) {
+	h.schedulerUC.RemoveJob(connectorID)
+}
+
+func (h *SchedulerHandler) InitJobs(ctx context.Context) error {
+	connectors, err := h.connectorUC.ListEnabledConnectors(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, connector := range connectors {
+		message := &domain.Message{
+			ConnectorID: connector.ConnectorID,
+			TaskType:    domain.TaskTypeIncrementalSync,
+		}
+
+		settings, err := connector.GetSyncSettings()
+		if err != nil || !settings.IncSync {
+			return err
+		}
+
+		err = h.schedulerUC.CreateJob(message, settings.IncSyncPeriod, config.IncrementalSyncQueue)
+		if err != nil {
+			return err
+		}
+	}
+
+	h.schedulerUC.StartScheduler()
+	return nil
+}
+
+func (h *SchedulerHandler) RemoveJobs() {
+	h.schedulerUC.RemoveJobs()
 }

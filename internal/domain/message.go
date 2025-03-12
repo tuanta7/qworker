@@ -5,21 +5,21 @@ import (
 	"time"
 )
 
-type JobType string
+type TaskType string
 
 const (
-	JobTypeIncrementalSync JobType = "INCREMENTAL_SYNC"
-	JobTypeFullSync        JobType = "FULL_SYNC"
-	JobTypeTerminate       JobType = "TERMINATE"
+	TaskTypeIncrementalSync TaskType = "INCREMENTAL_SYNC"
+	TaskTypeFullSync        TaskType = "FULL_SYNC"
+	TaskTypeTerminate       TaskType = "TERMINATE"
 )
 
 type Message struct {
-	ConnectorID uint64  `json:"connector_id"`
-	JobType     JobType `json:"job_type"`
+	ConnectorID uint64   `json:"connector_id"`
+	TaskType    TaskType `json:"task_type"`
 }
 
-type Job struct {
-	JobType   JobType
+type Task struct {
+	Type      TaskType
 	StartedAt time.Time
 	Cancel    context.CancelFunc
 }

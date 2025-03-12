@@ -3,22 +3,20 @@ package main
 import (
 	"context"
 	"encoding/json"
-	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
-	"log"
-	"strings"
-
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
+	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	scheduleruc "github.com/tuanta7/qworker/internal/scheduler"
 	"github.com/tuanta7/qworker/pkg/db"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
+	"log"
+	"strings"
 )
 
 func main() {
-	ctx := context.Background()
 	cfg := config.NewConfig()
 	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
 
@@ -37,39 +35,32 @@ func main() {
 	defer asynqClient.Close()
 
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
-	jobRepository := redisrepo.NewJobRepository(asynqClient)
-	schedulerUsecase := scheduleruc.NewUseCase(connectorRepository, jobRepository, zapLogger)
-	schedulerHandler := handler.NewSchedulerHandler(schedulerUsecase, zapLogger)
+	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zapLogger)
+	schedulerUsecase := scheduleruc.NewUseCase(asynqClient, zapLogger)
+	schedulerHandler := handler.NewSchedulerHandler(cfg, schedulerUsecase, connectorUsecase)
 
-	err = schedulerHandler.InitScheduledJobs()
+	err = schedulerHandler.InitJobs(context.Background())
 	if err != nil {
 		log.Fatalf("schedulerHandler.InitScheduledJobs(): %v", err)
 	}
+	defer schedulerHandler.RemoveJobs()
 
-	// Listen for database changes
-	go listen(ctx, pgClient, zapLogger)
-
-	// Block the main goroutine with an empty select statement
-	// to allow other goroutines to run
-	select {}
+	// Block the main goroutine and listen
+	listen(pgClient, zapLogger, schedulerHandler)
 }
 
-func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.ZapLogger) {
+func listen(pgClient *db.PostgresClient, zapLogger *logger.ZapLogger, schedulerHandler *handler.SchedulerHandler) {
+	ctx := context.Background()
+
 	conn, err := pgClient.Pool.Acquire(ctx)
 	if err != nil {
-		zapLogger.Error(
-			"failed to acquire database connection to listen for notifications",
-			zap.Error(err),
-		)
+		zapLogger.Error("failed to acquire database connection", zap.Error(err))
 		return
 	}
 
 	_, err = conn.Exec(ctx, "LISTEN connectors_changes")
 	if err != nil {
-		zapLogger.Error(
-			"failed to listen for notifications",
-			zap.Error(err),
-		)
+		zapLogger.Error("failed to listen for notifications", zap.Error(err))
 		return
 	}
 	defer func() {
@@ -77,39 +68,45 @@ func listen(ctx context.Context, pgClient *db.PostgresClient, zapLogger *logger.
 		conn.Release()
 	}()
 
+	notifyChan := make(chan string, 10)
+	go processNotifications(notifyChan, schedulerHandler, zapLogger)
+
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
 			zapLogger.Error("conn.Conn().WaitForNotification", zap.Error(err))
-			return
-		}
-
-		zapLogger.Info("received notification", zap.Any("payload", notification.Payload))
-
-		if notification.Channel != "connectors_changes" {
 			continue
 		}
 
-		message := &struct {
-			Table       string `json:"table"`
-			Action      string `json:"action"`
-			ConnectorID uint64 `json:"connector_id"`
-		}{}
+		if notification.Channel == "connectors_changes" {
+			notifyChan <- notification.Payload
+		}
+	}
+}
 
-		err = json.Unmarshal([]byte(notification.Payload), message)
+func processNotifications(notifyChan <-chan string, schedulerHandler *handler.SchedulerHandler, zapLogger *logger.ZapLogger) {
+	for noti := range notifyChan {
+		message := db.NotifyMessage{}
+		err := json.Unmarshal([]byte(noti), &message)
 		if err != nil {
 			zapLogger.Error("failed to unmarshal notification", zap.Error(err))
 		}
 
+		schedulerCtx := context.Background()
 		switch strings.ToLower(message.Action) {
 		case "insert":
-			zapLogger.Info("Inserted")
+			zapLogger.Info("connector inserted", zap.Any("message", message))
+			err = schedulerHandler.HandleInsertConnector(schedulerCtx, message.ID)
 		case "update":
-			// Handle update event
+			zapLogger.Info("connector updated", zap.Any("message", message))
+			err = schedulerHandler.HandleUpdateConnector(schedulerCtx, message.ID)
 		case "delete":
-			zapLogger.Info("Deleted")
-		default:
-			zapLogger.Warn("unknown notification payload")
+			zapLogger.Info("connector deleted", zap.Any("message", message))
+			schedulerHandler.HandleDeleteConnector(schedulerCtx, message.ID)
+		}
+
+		if err != nil {
+			zapLogger.Error("failed to handle trigger action", zap.Error(err))
 		}
 	}
 }

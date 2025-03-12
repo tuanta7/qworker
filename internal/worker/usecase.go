@@ -12,7 +12,7 @@ import (
 
 type UseCase struct {
 	lock                *sync.Mutex
-	runningJobs         map[uint64]*domain.Job
+	runningTask         map[uint64]*domain.Task
 	connectorRepository *pgrepo.ConnectorRepository
 	logger              *logger.ZapLogger
 }
@@ -20,15 +20,15 @@ type UseCase struct {
 func NewUseCase(connectorRepository *pgrepo.ConnectorRepository, zl *logger.ZapLogger) *UseCase {
 	return &UseCase{
 		lock:                new(sync.Mutex),
-		runningJobs:         make(map[uint64]*domain.Job),
+		runningTask:         make(map[uint64]*domain.Task),
 		connectorRepository: connectorRepository,
 		logger:              zl,
 	}
 }
 
-func (u *UseCase) GetJob(connectorID uint64) (*domain.Job, error) {
+func (u *UseCase) GetJob(connectorID uint64) (*domain.Task, error) {
 	u.lock.Lock()
-	job, exist := u.runningJobs[connectorID]
+	job, exist := u.runningTask[connectorID]
 	u.lock.Unlock()
 
 	if exist {
@@ -42,14 +42,14 @@ func (u *UseCase) RunJob(ctx context.Context, message domain.Message) error {
 	c, cancel := context.WithCancel(ctx)
 
 	u.lock.Lock()
-	u.runningJobs[message.ConnectorID] = &domain.Job{
-		JobType:   message.JobType,
+	u.runningTask[message.ConnectorID] = &domain.Task{
+		Type:      message.TaskType,
 		Cancel:    cancel,
 		StartedAt: time.Now(),
 	}
 	u.lock.Unlock()
 
-	defer delete(u.runningJobs, message.ConnectorID)
+	defer delete(u.runningTask, message.ConnectorID)
 
 	done := make(chan error)
 	go func(m domain.Message) {
@@ -73,10 +73,10 @@ func (u *UseCase) CancelJob(connectorID uint64) {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
-	job, exists := u.runningJobs[connectorID]
+	job, exists := u.runningTask[connectorID]
 	if exists && job.Cancel != nil {
 		job.Cancel()
-		delete(u.runningJobs, connectorID)
+		delete(u.runningTask, connectorID)
 	}
 }
 
@@ -84,22 +84,22 @@ func (u *UseCase) sync(message domain.Message) error {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
-	currJob, exists := u.runningJobs[message.ConnectorID]
+	currJob, exists := u.runningTask[message.ConnectorID]
 
-	switch message.JobType {
-	case domain.JobTypeIncrementalSync:
+	switch message.TaskType {
+	case domain.TaskTypeIncrementalSync:
 		if exists {
 			// Ignore
 			return nil
 		}
 		// Run Incremental Sync
-	case domain.JobTypeFullSync:
-		if exists && currJob.JobType == domain.JobTypeIncrementalSync {
+	case domain.TaskTypeFullSync:
+		if exists && currJob.Type == domain.TaskTypeIncrementalSync {
 			// Run Full Sync
 			return nil
 		}
 		return nil
-	case domain.JobTypeTerminate:
+	case domain.TaskTypeTerminate:
 		u.CancelJob(message.ConnectorID)
 	}
 

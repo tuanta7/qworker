@@ -21,7 +21,7 @@ func NewConnectorRepository(pc *db.PostgresClient) *ConnectorRepository {
 func (r *ConnectorRepository) List(ctx context.Context, page, pageSize uint64) ([]*domain.Connector, error) {
 	query, args, err := r.PostgresClient.Builder.
 		Select(domain.AllConnectorCols...).
-		From(domain.TableConnectors).
+		From(domain.TableConnector).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		ToSql()
@@ -29,38 +29,26 @@ func (r *ConnectorRepository) List(ctx context.Context, page, pageSize uint64) (
 		return nil, err
 	}
 
-	rows, err := r.Pool.Query(ctx, query, args...)
+	return r.list(ctx, query, args)
+}
+
+func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) ([]*domain.Connector, error) {
+	query, args, err := r.PostgresClient.Builder.
+		Select(domain.AllConnectorCols...).
+		From(domain.TableConnector).
+		Where(squirrel.Eq{domain.ColEnabled: enabled}).
+		ToSql()
 	if err != nil {
 		return nil, err
 	}
 
-	connectors := make([]*domain.Connector, 0)
-	for rows.Next() {
-		var c domain.Connector
-		err = rows.Scan(
-			&c.ConnectorID,
-			&c.ConnectorType,
-			&c.DisplayName,
-			&c.Enabled,
-			&c.LastSync,
-			&c.Data,
-			&c.CreatedAt,
-			&c.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		connectors = append(connectors, &c)
-	}
-
-	return connectors, nil
+	return r.list(ctx, query, args)
 }
 
-func (r *ConnectorRepository) Get(ctx context.Context, id uint64) (*domain.Connector, error) {
+func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.Connector, error) {
 	query, args, err := r.PostgresClient.Builder.
 		Select(domain.AllConnectorCols...).
-		From(domain.TableConnectors).
+		From(domain.TableConnector).
 		Where(squirrel.Eq{domain.ColConnectorID: id}).
 		ToSql()
 	if err != nil {
@@ -88,16 +76,7 @@ func (r *ConnectorRepository) Get(ctx context.Context, id uint64) (*domain.Conne
 	return c, nil
 }
 
-func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) ([]*domain.Connector, error) {
-	query, args, err := r.PostgresClient.Builder.
-		Select(domain.AllConnectorCols...).
-		From(domain.TableConnectors).
-		Where(squirrel.Eq{domain.ColEnabled: enabled}).
-		ToSql()
-	if err != nil {
-		return nil, err
-	}
-
+func (r *ConnectorRepository) list(ctx context.Context, query string, args []interface{}) ([]*domain.Connector, error) {
 	rows, err := r.Pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err

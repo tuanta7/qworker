@@ -1,11 +1,11 @@
 package main
 
 import (
+	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"log"
 
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
-	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/db"
@@ -23,7 +23,8 @@ func main() {
 	defer pgClient.Close()
 
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
-	workerUseCase := workeruc.NewUseCase(connectorRepository, zapLogger)
+	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zapLogger)
+	workerUsecase := workeruc.NewUseCase(connectorRepository, zapLogger)
 
 	srv := asynq.NewServer(
 		asynq.RedisFailoverClientOpt{
@@ -41,19 +42,8 @@ func main() {
 			},
 		})
 
-	mux := NewRouter(cfg, zapLogger, workerUseCase)
+	mux := NewRouter(cfg, zapLogger, workerUsecase, connectorUsecase)
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("asynq server stopped: %v", err)
 	}
-}
-
-func NewRouter(cfg *config.Config, zl *logger.ZapLogger, workerUC *workeruc.UseCase) *asynq.ServeMux {
-	workerHandler := handler.NewWorkerHandler(workerUC, zl)
-
-	mux := asynq.NewServeMux()
-	mux.HandleFunc(config.TerminateQueue, workerHandler.HandleTerminateSync)
-	mux.HandleFunc(config.FullSyncQueue, workerHandler.HandleUserFullSync)
-	mux.HandleFunc(config.IncrementalSyncQueue, workerHandler.HandleUserIncrementalSync)
-
-	return mux
 }

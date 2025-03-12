@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	connectoruc "github.com/tuanta7/qworker/internal/connector"
 
 	"github.com/hibiken/asynq"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
@@ -10,20 +11,17 @@ import (
 )
 
 type WorkerHandler struct {
-	workerUC *workeruc.UseCase
-	logger   *logger.ZapLogger
+	workerUC    *workeruc.UseCase
+	connectorUC *connectoruc.UseCase
+	logger      *logger.ZapLogger
 }
 
-func NewWorkerHandler(workerUC *workeruc.UseCase, logger *logger.ZapLogger) *WorkerHandler {
+func NewWorkerHandler(workerUC *workeruc.UseCase, connectorUC *connectoruc.UseCase, logger *logger.ZapLogger) *WorkerHandler {
 	return &WorkerHandler{
-		workerUC: workerUC,
-		logger:   logger,
+		workerUC:    workerUC,
+		connectorUC: connectorUC,
+		logger:      logger,
 	}
-}
-
-func (h *WorkerHandler) HandleTerminateSync(ctx context.Context, task *asynq.Task) error {
-	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task.Payload()))
-	return nil
 }
 
 func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asynq.Task) error {
@@ -33,7 +31,10 @@ func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asy
 
 func (h *WorkerHandler) HandleUserFullSync(ctx context.Context, task *asynq.Task) error {
 	h.logger.Info("WorkerHandler - HandleUserFullSync", zap.Any("task", task.Payload()))
-	// Check if any Full/Incremental Sync Job is running
-	// Skip if there is a full sync job still running, override if Incr. Sync
+	return nil
+}
+
+func (h *WorkerHandler) HandleTerminateSync(ctx context.Context, task *asynq.Task) error {
+	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task.Payload()))
 	return nil
 }
