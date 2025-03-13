@@ -1,4 +1,6 @@
-CREATE TABLE connector
+CREATE SCHEMA IF NOT EXISTS private
+
+CREATE TABLE IF NOT EXISTS private.connector
 (
     id             SERIAL PRIMARY KEY,
     connector_type VARCHAR(255) NOT NULL,
@@ -10,23 +12,24 @@ CREATE TABLE connector
     updated_at     TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE FUNCTION notify_connector_changes() RETURNS TRIGGER AS
+CREATE FUNCTION private.notify_connector_changes() RETURNS TRIGGER AS
 $$
 BEGIN
     PERFORM pg_notify('connectors_changes', jsonb_build_object(
             'table', TG_TABLE_NAME,
             'action', TG_OP,
             'id', CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
-    )::text); -- converts to TEXT data type because pg_notify only accept text payload
+                                            )::text); -- converts to TEXT data type because pg_notify only accept text payload
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 
 CREATE TRIGGER notify_connector_changes
-AFTER INSERT OR UPDATE OR DELETE 
-ON connector
-FOR EACH ROW EXECUTE FUNCTION notify_connector_changes()
+    AFTER INSERT OR UPDATE OR DELETE
+    ON private.connector
+    FOR EACH ROW
+EXECUTE FUNCTION private.notify_connector_changes()
 
 -- Notes:
 -- channels are created implicitly on LISTEN/NOTIFY

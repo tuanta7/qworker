@@ -27,7 +27,7 @@ func NewWorkerHandler(workerUC *workeruc.UseCase, connectorUC *connectoruc.UseCa
 }
 
 func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asynq.Task) error {
-	message := domain.Message{}
+	message := domain.QueueMessage{}
 	err := json.Unmarshal(task.Payload(), &message)
 	if err != nil {
 		return err

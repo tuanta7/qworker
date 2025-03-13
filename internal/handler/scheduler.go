@@ -37,7 +37,7 @@ func (h *SchedulerHandler) HandleInsertConnector(ctx context.Context, connectorI
 		return err
 	}
 
-	message := &domain.Message{
+	message := &domain.QueueMessage{
 		ConnectorID: connector.ConnectorID,
 		TaskType:    domain.TaskTypeIncrementalSync,
 	}
@@ -80,7 +80,7 @@ func (h *SchedulerHandler) HandleUpdateConnector(ctx context.Context, connectorI
 		h.schedulerUC.RemoveJob(connectorID)
 	}
 
-	message := &domain.Message{
+	message := &domain.QueueMessage{
 		ConnectorID: connector.ConnectorID,
 		TaskType:    domain.TaskTypeIncrementalSync,
 	}
@@ -105,7 +105,7 @@ func (h *SchedulerHandler) InitJobs(ctx context.Context) error {
 	}
 
 	for _, connector := range connectors {
-		message := &domain.Message{
+		message := &domain.QueueMessage{
 			ConnectorID: connector.ConnectorID,
 			TaskType:    domain.TaskTypeIncrementalSync,
 		}
