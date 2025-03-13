@@ -47,7 +47,7 @@ func (u *UseCase) GetJobPeriod(connectorID uint64) (time.Duration, bool) {
 	return jobInfo.Period, true
 }
 
-func (u *UseCase) CreateJob(message *domain.Message, period time.Duration, queue string) error {
+func (u *UseCase) CreateJob(message *domain.QueueMessage, period time.Duration, queue string) error {
 	payload, err := json.Marshal(message)
 	if err != nil {
 		return err

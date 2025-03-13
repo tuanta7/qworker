@@ -11,6 +11,7 @@ type ConnectorType string
 
 const (
 	ConnectorTypeLDAP ConnectorType = "LDAP"
+	ConnectorTypeSCIM ConnectorType = "SCIM"
 )
 
 type Connector struct {
@@ -56,17 +57,24 @@ type SyncSettings struct {
 	IncSyncPeriod time.Duration `json:"incrementalSyncPeriod"`
 }
 
+type Mapping struct {
+	ExternalID  string            `json:"external_id"`
+	Email       string            `json:"email"`
+	PhoneNumber string            `json:"phone_number"`
+	Custom      map[string]string `json:"custom"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+}
+
 const (
-	TableConnector   = "connector"
+	TableConnector   = "private.connector"
 	ColConnectorID   = "id"
 	ColConnectorType = "connector_type"
-	ColDisplayName   = "display_name"
 	ColEnabled       = "enabled"
 	ColLastSync      = "last_sync"
 
-	ColData      = "data"
-	ColCreatedAt = "created_at"
-	ColUpdatedAt = "updated_at"
+	TableMapping  = "private.mapping"
+	ColExternalID = "external_id"
 )
 
 var (

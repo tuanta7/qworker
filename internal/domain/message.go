@@ -13,7 +13,7 @@ const (
 	TaskTypeTerminate       TaskType = "TERMINATE"
 )
 
-type Message struct {
+type QueueMessage struct {
 	ConnectorID uint64   `json:"connector_id"`
 	TaskType    TaskType `json:"task_type"`
 }

@@ -38,7 +38,7 @@ func (u *UseCase) GetTask(connectorID uint64) (*domain.Task, error) {
 	return nil, utils.ErrJobNotFound
 }
 
-func (u *UseCase) RunTask(ctx context.Context, message domain.Message) error {
+func (u *UseCase) RunTask(ctx context.Context, message domain.QueueMessage) error {
 	c, cancel := context.WithCancel(ctx)
 
 	u.lock.Lock()
@@ -52,7 +52,7 @@ func (u *UseCase) RunTask(ctx context.Context, message domain.Message) error {
 	defer delete(u.runningTask, message.ConnectorID)
 
 	done := make(chan error)
-	go func(m domain.Message) {
+	go func(m domain.QueueMessage) {
 		defer close(done)
 
 		err := u.sync(m)
@@ -80,7 +80,7 @@ func (u *UseCase) TerminateTask(connectorID uint64) {
 	}
 }
 
-func (u *UseCase) sync(message domain.Message) error {
+func (u *UseCase) sync(message domain.QueueMessage) error {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
