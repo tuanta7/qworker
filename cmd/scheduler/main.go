@@ -20,10 +20,7 @@ func main() {
 	cfg := config.NewConfig()
 	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
 
-	pgClient, err := db.NewPostgresClient(cfg)
-	if err != nil {
-		log.Fatalf("db.NewPostgresClient: %v", err)
-	}
+	pgClient := db.MustNewPostgresClient(cfg)
 	defer pgClient.Close()
 
 	asynqClient := asynq.NewClient(asynq.RedisFailoverClientOpt{
@@ -39,7 +36,7 @@ func main() {
 	schedulerUsecase := scheduleruc.NewUseCase(asynqClient, zapLogger)
 	schedulerHandler := handler.NewSchedulerHandler(cfg, schedulerUsecase, connectorUsecase)
 
-	err = schedulerHandler.InitJobs(context.Background())
+	err := schedulerHandler.InitJobs(context.Background())
 	if err != nil {
 		log.Fatalf("schedulerHandler.InitScheduledJobs(): %v", err)
 	}
@@ -85,9 +82,9 @@ func listen(pgClient *db.PostgresClient, zapLogger *logger.ZapLogger, schedulerH
 }
 
 func processNotifications(notifyChan <-chan string, schedulerHandler *handler.SchedulerHandler, zapLogger *logger.ZapLogger) {
-	for noti := range notifyChan {
+	for n := range notifyChan {
 		message := db.NotifyMessage{}
-		err := json.Unmarshal([]byte(noti), &message)
+		err := json.Unmarshal([]byte(n), &message)
 		if err != nil {
 			zapLogger.Error("failed to unmarshal notification", zap.Error(err))
 		}

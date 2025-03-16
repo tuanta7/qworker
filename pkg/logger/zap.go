@@ -72,15 +72,9 @@ func NewLogger(logLevel string) (*ZapLogger, error) {
 		Sampling:          nil,
 		Encoding:          "json",
 		EncoderConfig:     encoderCfg,
-		OutputPaths: []string{
-			"stderr",
-		},
-		ErrorOutputPaths: []string{
-			"stderr",
-		},
-		InitialFields: map[string]interface{}{
-			"pid": os.Getpid(),
-		},
+		OutputPaths:       []string{"stderr"},
+		ErrorOutputPaths:  []string{"stderr"},
+		InitialFields:     map[string]any{"pid": os.Getpid()},
 	}
 
 	logger, err := config.Build()

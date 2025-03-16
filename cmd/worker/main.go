@@ -16,7 +16,7 @@ func main() {
 	cfg := config.NewConfig()
 	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
 
-	pgClient, err := db.NewPostgresClient(cfg)
+	pgClient, err := db.NewPostgresClient(cfg, db.WithMaxConns(10))
 	if err != nil {
 		log.Fatalf("db.NewPostgresClient: %v", err)
 	}

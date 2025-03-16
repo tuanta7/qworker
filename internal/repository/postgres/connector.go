@@ -19,7 +19,7 @@ func NewConnectorRepository(pc *db.PostgresClient) *ConnectorRepository {
 }
 
 func (r *ConnectorRepository) List(ctx context.Context, page, pageSize uint64) ([]*domain.Connector, error) {
-	query, args, err := r.PostgresClient.Builder.
+	query, args, err := r.PostgresClient.QueryBuilder.
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnector).
 		Offset((page - 1) * pageSize).
@@ -33,7 +33,7 @@ func (r *ConnectorRepository) List(ctx context.Context, page, pageSize uint64) (
 }
 
 func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) ([]*domain.Connector, error) {
-	query, args, err := r.PostgresClient.Builder.
+	query, args, err := r.PostgresClient.QueryBuilder.
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnector).
 		Where(squirrel.Eq{domain.ColEnabled: enabled}).
@@ -46,7 +46,7 @@ func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) (
 }
 
 func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.Connector, error) {
-	query, args, err := r.PostgresClient.Builder.
+	query, args, err := r.PostgresClient.QueryBuilder.
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnector).
 		Where(squirrel.Eq{domain.ColConnectorID: id}).
