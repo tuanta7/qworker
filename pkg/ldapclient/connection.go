@@ -27,3 +27,9 @@ func (c *ldapConnection) Search(baseDN string, filter map[string]any, opts ...Se
 func (c *ldapConnection) Close() error {
 	return c.Conn.Close()
 }
+
+func WithPagination(page uint64, pageSize uint64) SearchOptions {
+	return func(r *ldap.SearchRequest) {
+		r.Controls = nil
+	}
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
+	"github.com/tuanta7/qworker/pkg/ldapclient"
 	"log"
 
 	"github.com/hibiken/asynq"
@@ -15,6 +16,7 @@ import (
 func main() {
 	cfg := config.NewConfig()
 	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
+	ldapClient := ldapclient.NewLDAPClient(cfg.StartTLSConfig.SkipVerify)
 
 	pgClient, err := db.NewPostgresClient(cfg, db.WithMaxConns(10))
 	if err != nil {
@@ -24,7 +26,7 @@ func main() {
 
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
 	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zapLogger)
-	workerUsecase := workeruc.NewUseCase(connectorRepository, zapLogger)
+	workerUsecase := workeruc.NewUseCase(ldapClient, connectorRepository, zapLogger)
 
 	srv := asynq.NewServer(
 		asynq.RedisFailoverClientOpt{

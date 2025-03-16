@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
+	"github.com/tuanta7/qworker/pkg/ldapclient"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
 	"sync"
@@ -14,14 +15,16 @@ import (
 type UseCase struct {
 	lock                *sync.Mutex
 	runningTask         map[uint64]*domain.Task
+	ldapClient          *ldapclient.LDAPClient
 	connectorRepository *pgrepo.ConnectorRepository
 	logger              *logger.ZapLogger
 }
 
-func NewUseCase(connectorRepository *pgrepo.ConnectorRepository, zl *logger.ZapLogger) *UseCase {
+func NewUseCase(ldapClient *ldapclient.LDAPClient, connectorRepository *pgrepo.ConnectorRepository, zl *logger.ZapLogger) *UseCase {
 	return &UseCase{
 		lock:                new(sync.Mutex),
 		runningTask:         make(map[uint64]*domain.Task),
+		ldapClient:          ldapClient,
 		connectorRepository: connectorRepository,
 		logger:              zl,
 	}
@@ -83,6 +86,13 @@ func (u *UseCase) sync(message domain.QueueMessage) error {
 }
 
 func (u *UseCase) incrementalSync(connectorID uint64) error {
+	conn, err := u.ldapClient.NewConnection("", 1*time.Second)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	conn.Search("", nil, ldapclient.WithPagination(1, 10))
 
 	return nil
 }

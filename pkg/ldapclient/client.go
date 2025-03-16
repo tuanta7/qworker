@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"github.com/go-ldap/ldap/v3"
 	"net"
+	neturl "net/url"
 	"sync"
 	"time"
 )
@@ -12,6 +13,14 @@ type LDAPClient struct {
 	lock       sync.Mutex
 	pools      map[string]*LDAPPool
 	skipVerify bool
+}
+
+func NewLDAPClient(skipVerify bool) *LDAPClient {
+	return &LDAPClient{
+		lock:       sync.Mutex{},
+		pools:      make(map[string]*LDAPPool),
+		skipVerify: skipVerify,
+	}
 }
 
 func (c *LDAPClient) NewLDAPPool(url string, maxConns int) (LDAPPool, error) {
@@ -42,7 +51,9 @@ func (c *LDAPClient) NewConnection(url string, timeout time.Duration) (LDAPConne
 		return nil, err
 	}
 
+	serverName, _ := extractServerName(url)
 	err = conn.StartTLS(&tls.Config{
+		ServerName:         serverName,
 		InsecureSkipVerify: c.skipVerify,
 	})
 	if err != nil {
@@ -51,4 +62,18 @@ func (c *LDAPClient) NewConnection(url string, timeout time.Duration) (LDAPConne
 	}
 
 	return &ldapConnection{Conn: conn}, nil
+}
+
+func extractServerName(rawURL string) (string, error) {
+	url, err := neturl.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	host, _, err := net.SplitHostPort(url.Host)
+	if err != nil {
+		return "", err
+	}
+
+	return host, nil
 }

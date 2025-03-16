@@ -11,12 +11,13 @@ import (
 const envPrefix = "QWORKER"
 
 type Config struct {
-	ServerName string `envconfig:"SERVER_NAME" default:"worker"`
-	ServerHost string `envconfig:"SERVER_HOST" default:"localhost"`
-	ServerPort uint32 `envconfig:"SERVER_PORT" default:"8080"`
-	Logger     *LoggerConfig
-	Postgres   *PostgresConfig
-	Redis      *RedisConfig
+	ServerName     string `envconfig:"SERVER_NAME" default:"worker"`
+	ServerHost     string `envconfig:"SERVER_HOST" default:"localhost"`
+	ServerPort     uint32 `envconfig:"SERVER_PORT" default:"8080"`
+	Logger         *LoggerConfig
+	StartTLSConfig *StartTLSConfig
+	Postgres       *PostgresConfig
+	Redis          *RedisConfig
 }
 
 type LoggerConfig struct {
@@ -37,6 +38,10 @@ type RedisConfig struct {
 	MasterName string   `envconfig:"REDIS_MASTER_NAME" default:"mymaster"`
 	Password   string   `envconfig:"REDIS_PASSWORD" default:""`
 	Database   int      `envconfig:"REDIS_DATABASE" default:"0"`
+}
+
+type StartTLSConfig struct {
+	SkipVerify bool `envconfig:"SKIP_VERIFY" default:"false"`
 }
 
 func NewConfig() *Config {
