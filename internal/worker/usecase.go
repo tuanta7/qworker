@@ -2,7 +2,9 @@ package workeruc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/pkg/ldapclient"
@@ -22,7 +24,7 @@ type UseCase struct {
 
 func NewUseCase(ldapClient *ldapclient.LDAPClient, connectorRepository *pgrepo.ConnectorRepository, zl *logger.ZapLogger) *UseCase {
 	return &UseCase{
-		lock:                new(sync.Mutex),
+		lock:                &sync.Mutex{},
 		runningTask:         make(map[uint64]*domain.Task),
 		ldapClient:          ldapClient,
 		connectorRepository: connectorRepository,
@@ -37,14 +39,16 @@ func (u *UseCase) RunTask(ctx context.Context, message domain.QueueMessage) erro
 	u.lock.Lock()
 	task, exist := u.runningTask[message.ConnectorID]
 
-	if exist && isPrior(task.Type, message.TaskType) {
-		u.lock.Unlock()
-		u.logger.Error("a task with higher priority is currently running", zap.Any("task", task))
-		return fmt.Errorf("higher priority task is running")
+	if exist {
+		if isPrior(task.Type, message.TaskType) {
+			u.lock.Unlock()
+			u.logger.Error("a task with higher priority is currently running", zap.Any("task", task))
+			return fmt.Errorf("higher priority task is running")
+		}
+		u.logger.Info("overriding the current task", zap.Any("task", task))
+		u.terminateTask(message.ConnectorID)
 	}
 
-	u.logger.Info("overriding the current task", zap.Any("task", task))
-	u.terminateTask(message.ConnectorID)
 	u.runningTask[message.ConnectorID] = &domain.Task{
 		Type:      message.TaskType,
 		Cancel:    cancel,
@@ -54,12 +58,12 @@ func (u *UseCase) RunTask(ctx context.Context, message domain.QueueMessage) erro
 	u.lock.Unlock()
 
 	done := make(chan error)
-	go func(m domain.QueueMessage) {
+	go func(ctx context.Context, m domain.QueueMessage) {
 		defer close(done)
-		if err := u.sync(m); err != nil {
+		if err := u.ldapSync(ctx, m); err != nil {
 			done <- err
 		}
-	}(message)
+	}(c, message)
 
 	select {
 	case <-c.Done():
@@ -69,15 +73,15 @@ func (u *UseCase) RunTask(ctx context.Context, message domain.QueueMessage) erro
 	}
 }
 
-func (u *UseCase) sync(message domain.QueueMessage) error {
+func (u *UseCase) ldapSync(ctx context.Context, message domain.QueueMessage) error {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
 	switch message.TaskType {
 	case domain.TaskTypeIncrementalSync:
-		return u.incrementalSync(message.ConnectorID)
+		return u.ldapIncrementalSync(ctx, message.ConnectorID)
 	case domain.TaskTypeFullSync:
-		return u.fullSync()
+		return u.ldapFullSync()
 	case domain.TaskTypeTerminate:
 		u.terminateTask(message.ConnectorID)
 	}
@@ -85,19 +89,51 @@ func (u *UseCase) sync(message domain.QueueMessage) error {
 	return nil
 }
 
-func (u *UseCase) incrementalSync(connectorID uint64) error {
+func (u *UseCase) ldapIncrementalSync(ctx context.Context, connectorID uint64) error {
+	connector, err := u.connectorRepository.GetByID(ctx, connectorID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := u.ldapClient.NewConnection("", 1*time.Second)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	conn.Search("", nil, ldapclient.WithPagination(1, 10))
+	err = json.Unmarshal(connector.Data.Raw, &connector.Data.Parsed)
+	if err != nil {
+		return err
+	}
+
+	parsedConfig, ok := connector.Data.Parsed.(domain.LdapConnector)
+	if !ok {
+		return fmt.Errorf("invalid connector")
+	}
+
+	pagingControl := ldap.NewControlPaging(parsedConfig.SyncSettings.BatchSize)
+	for {
+		resp, err := conn.Search(parsedConfig.BaseDN,
+			fmt.Sprintf("modifiedTimestamp > %s", connector.LastSync), // TODO: use mapping config to configure the real modifiedTimestamp attribute name
+			parsedConfig.ReadTimeout,
+			ldapclient.WithScope(ldap.ScopeSingleLevel),
+			ldapclient.WithPagination(pagingControl))
+		if err != nil {
+			return err
+		}
+
+		updatedControl := ldap.FindControl(resp.Controls, ldap.ControlTypePaging)
+		if ctrl, ok := updatedControl.(*ldap.ControlPaging); ctrl != nil && ok && len(ctrl.Cookie) != 0 {
+			pagingControl.SetCookie(ctrl.Cookie)
+			continue
+		}
+		break
+	}
 
 	return nil
 }
 
-func (u *UseCase) fullSync() error {
+func (u *UseCase) ldapFullSync() error {
 	return nil
 }
 
@@ -112,7 +148,7 @@ func (u *UseCase) terminateTask(connectorID uint64) {
 	}
 }
 
-// isPrior return true if t2 has higher priority than t1
+// isPrior check if t2 has higher priority than t1
 func isPrior(t1, t2 domain.TaskType) bool {
 	switch t1 {
 	case domain.TaskTypeIncrementalSync:

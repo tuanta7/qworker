@@ -52,7 +52,7 @@ type LdapConnector struct {
 }
 
 type SyncSettings struct {
-	BatchSize     uint64        `json:"batchSize"`
+	BatchSize     uint32        `json:"batchSize"`
 	IncSync       bool          `json:"incrementalSyncEnabled"`
 	IncSyncPeriod time.Duration `json:"incrementalSyncPeriod"`
 }
