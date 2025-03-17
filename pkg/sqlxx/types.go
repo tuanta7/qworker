@@ -4,7 +4,10 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"time"
 )
+
+type DurationString time.Duration
 
 type TextData struct {
 	Raw    []byte
