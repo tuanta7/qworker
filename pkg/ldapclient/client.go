@@ -10,9 +10,10 @@ import (
 )
 
 type LDAPClient struct {
-	lock       sync.Mutex
-	pools      map[string]*LDAPPool
-	skipVerify bool
+	lock        sync.Mutex
+	pools       map[string]*LDAPPool
+	skipVerify  bool
+	maxPoolWait time.Duration
 }
 
 func NewLDAPClient(skipVerify bool) *LDAPClient {
@@ -29,19 +30,24 @@ func (c *LDAPClient) NewLDAPPool(url string, maxConns int) (LDAPPool, error) {
 	}
 
 	p := &ldapPool{
+		lock:     sync.Mutex{},
 		conns:    make(chan LDAPConnection, maxConns),
 		maxConns: maxConns,
-		url:      url,
+		maxWait:  c.maxPoolWait,
+	}
+
+	for i := 0; i < p.maxConns; i++ {
+		conn, err := c.NewConnection(url, 0)
+		if err != nil {
+			return nil, err
+		}
+		p.conns <- conn
 	}
 
 	return p, nil
 }
 
 func (c *LDAPClient) NewConnection(url string, timeout time.Duration) (LDAPConnection, error) {
-	if timeout < 0 {
-		timeout = 10 * time.Second
-	}
-
 	dialerConfig := &net.Dialer{
 		Timeout: timeout,
 	}

@@ -9,6 +9,7 @@ type SearchOptions func(*ldap.SearchRequest)
 
 type LDAPConnection interface {
 	Bind(username, password string) error
+	UnauthenticatedBind(username string) error
 	Search(baseDN string, filter string, timeout time.Duration, opts ...SearchOptions) (*ldap.SearchResult, error)
 	Close() error
 }
@@ -19,6 +20,10 @@ type ldapConnection struct {
 
 func (c *ldapConnection) Bind(username, password string) error {
 	return c.Conn.Bind(username, password)
+}
+
+func (c *ldapConnection) UnauthenticatedBind(username string) error {
+	return c.Conn.UnauthenticatedBind(username)
 }
 
 func (c *ldapConnection) Search(baseDN string, filter string, timeout time.Duration, opts ...SearchOptions) (*ldap.SearchResult, error) {
