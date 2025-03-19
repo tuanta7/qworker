@@ -2,6 +2,7 @@ package main
 
 import (
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
+	"github.com/tuanta7/qworker/pkg/cipherx"
 	"github.com/tuanta7/qworker/pkg/ldapclient"
 	"log"
 
@@ -15,6 +16,12 @@ import (
 
 func main() {
 	cfg := config.NewConfig()
+
+	aead, err := cipherx.New([]byte(cfg.AesGsmSecret), cipherx.AEAD)
+	if err != nil {
+		log.Fatalf("cipherx.New(): %v", err)
+	}
+
 	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
 	ldapClient := ldapclient.NewLDAPClient(cfg.StartTLSConfig.SkipVerify)
 
@@ -24,9 +31,10 @@ func main() {
 	}
 	defer pgClient.Close()
 
+	userRepository := pgrepo.NewUserRepository(pgClient)
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
 	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zapLogger)
-	workerUsecase := workeruc.NewUseCase(ldapClient, connectorRepository, zapLogger)
+	workerUsecase := workeruc.NewUseCase(ldapClient, aead, connectorRepository, userRepository, zapLogger)
 
 	srv := asynq.NewServer(
 		asynq.RedisFailoverClientOpt{

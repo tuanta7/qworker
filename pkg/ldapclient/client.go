@@ -49,7 +49,7 @@ func (c *LDAPClient) NewLDAPPool(url string, maxConns int) (LDAPPool, error) {
 
 func (c *LDAPClient) NewConnection(url string, timeout time.Duration) (LDAPConnection, error) {
 	dialerConfig := &net.Dialer{
-		Timeout: timeout,
+		Timeout: timeout * time.Millisecond,
 	}
 
 	conn, err := ldap.DialURL(url, ldap.DialWithDialer(dialerConfig))

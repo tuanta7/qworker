@@ -27,12 +27,14 @@ func (t *TextData) Scan(value any) error {
 	return errors.New("error while scanning TextData: unsupported type")
 }
 
-func (t *TextData) Value() (driver.Value, error) {
+func (t TextData) Value() (driver.Value, error) {
+	if t.Parsed == nil {
+		return t.Raw, nil
+	}
+
 	return json.Marshal(t.Parsed)
 }
 
 func (t *TextData) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.Parsed)
 }
-
-type MapData map[string]string

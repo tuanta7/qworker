@@ -1,33 +1,46 @@
 package domain
 
-import "github.com/tuanta7/qworker/pkg/sqlxx"
+import (
+	"github.com/tuanta7/qworker/pkg/sqlxx"
+	"time"
+)
 
 type User struct {
 	UserID        string         `json:"id"`
-	DisplayName   string         `json:"displayName"`
-	Email         string         `json:"email"`
-	VerifiedEmail bool           `json:"verifiedEmail"`
+	Username      string         `json:"username"`
+	FullName      string         `json:"fullName"`
 	PhoneNumber   string         `json:"phoneNumber"`
+	Email         string         `json:"email"`
+	EmailVerified bool           `json:"emailVerified"`
+	Active        bool           `json:"active"`
+	SourceID      *uint64        `json:"sourceID"`
 	Data          sqlxx.TextData `json:"data"`
-	CreatedAt     string         `json:"createdAt"`
-	UpdatedAt     string         `json:"updatedAt"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
 }
 
 const (
 	TableUser        string = "private.user"
 	ColUserID        string = "id"
-	ColEmail         string = "email"
-	ColVerifiedEmail string = "verified_email"
+	ColUsername      string = "username"
+	ColFullName      string = "full_name"
 	ColPhoneNumber   string = "phone_number"
+	ColEmail         string = "email"
+	ColEmailVerified string = "email_verified"
+	ColActive        string = "active"
+	ColSourceID      string = "source_id"
 )
 
 var (
 	AllUserCols = []string{
 		ColUserID,
-		ColDisplayName,
-		ColEmail,
-		ColVerifiedEmail,
+		ColUsername,
+		ColFullName,
 		ColPhoneNumber,
+		ColEmail,
+		ColEmailVerified,
+		ColActive,
+		ColSourceID,
 		ColData,
 		ColCreatedAt,
 		ColUpdatedAt,

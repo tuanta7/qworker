@@ -48,6 +48,10 @@ func (u *UseCase) GetJobPeriod(connectorID uint64) (time.Duration, bool) {
 }
 
 func (u *UseCase) CreateJob(message *domain.QueueMessage, period time.Duration, queue string) error {
+	if period%time.Second != 0 {
+		period = period * time.Second
+	}
+
 	payload, err := json.Marshal(message)
 	if err != nil {
 		return err

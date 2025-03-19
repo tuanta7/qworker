@@ -76,6 +76,10 @@ func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.C
 	return c, nil
 }
 
+func (r *ConnectorRepository) Update(ctx context.Context, c *domain.Connector) error {
+	return nil
+}
+
 func (r *ConnectorRepository) list(ctx context.Context, query string, args []interface{}) ([]*domain.Connector, error) {
 	rows, err := r.Pool.Query(ctx, query, args...)
 	if err != nil {
