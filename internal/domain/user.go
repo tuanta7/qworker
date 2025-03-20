@@ -45,4 +45,16 @@ var (
 		ColCreatedAt,
 		ColUpdatedAt,
 	}
+
+	AllUserSyncCols = []string{
+		ColUserID,
+		ColUsername,
+		ColFullName,
+		ColPhoneNumber,
+		ColEmail,
+		ColSourceID,
+		ColData,
+		ColCreatedAt,
+		ColUpdatedAt,
+	}
 )

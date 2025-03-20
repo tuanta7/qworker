@@ -11,6 +11,7 @@ import (
 	"github.com/tuanta7/qworker/pkg/cipherx"
 	"github.com/tuanta7/qworker/pkg/ldapclient"
 	"github.com/tuanta7/qworker/pkg/logger"
+	"github.com/tuanta7/qworker/pkg/utils"
 	"go.uber.org/zap"
 	"sync"
 	"time"
@@ -206,13 +207,13 @@ func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, fil
 			users[i] = user
 		}
 
-		if len(users) == 0 {
-			break
-		}
-
-		_, err = u.userRepository.BulkInsertAndUpdate(ctx, users)
+		_, err = u.userRepository.BulkUpsert(ctx, users)
 		if err != nil {
-			u.logger.Error("u.userRepository.BulkInsertAndUpdate", zap.Error(err))
+			if errors.Is(err, utils.ErrNoUserProvided) {
+				u.logger.Info("userRepository.BulkUpsert", zap.Error(err))
+				break
+			}
+			u.logger.Error("u.userRepository.BulkUpsert", zap.Error(err))
 			return 0, err
 		}
 
