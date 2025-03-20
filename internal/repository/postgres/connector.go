@@ -76,8 +76,19 @@ func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.C
 	return c, nil
 }
 
-func (r *ConnectorRepository) Update(ctx context.Context, c *domain.Connector) error {
-	return nil
+func (r *ConnectorRepository) UpdateSyncInfo(ctx context.Context, c *domain.Connector) error {
+	query, args, err := r.PostgresClient.QueryBuilder.
+		Update(domain.TableConnector).
+		Set(domain.ColLastSync, c.LastSync).
+		Set(domain.ColUpdatedAt, c.UpdatedAt).
+		Where(squirrel.Eq{domain.ColConnectorID: c.ConnectorID}).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	_, err = r.Pool.Exec(ctx, query, args...)
+	return err
 }
 
 func (r *ConnectorRepository) list(ctx context.Context, query string, args []interface{}) ([]*domain.Connector, error) {

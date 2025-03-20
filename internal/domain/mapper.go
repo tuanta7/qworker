@@ -8,6 +8,7 @@ import (
 
 type Mapper struct {
 	ExternalID  string            `json:"external_id"`
+	Username    string            `json:"username"`
 	FullName    string            `json:"full_name"`
 	Email       string            `json:"email"`
 	PhoneNumber string            `json:"phone_number"`

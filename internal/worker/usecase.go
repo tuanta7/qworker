@@ -75,7 +75,7 @@ func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) err
 	done := make(chan error)
 	go func(ctx context.Context, m *domain.QueueMessage) {
 		defer close(done)
-		if err := u.sync(ctx, m); err != nil {
+		if err := u.runTask(ctx, m); err != nil {
 			done <- err
 		}
 	}(c, message)
@@ -88,7 +88,7 @@ func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) err
 	}
 }
 
-func (u *UseCase) sync(ctx context.Context, message *domain.QueueMessage) error {
+func (u *UseCase) runTask(ctx context.Context, message *domain.QueueMessage) error {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
@@ -97,63 +97,10 @@ func (u *UseCase) sync(ctx context.Context, message *domain.QueueMessage) error 
 		return err
 	}
 
-	switch message.TaskType {
-	case domain.TaskTypeIncrementalSync:
-		err = u.incrementalSync(ctx, connector)
-	case domain.TaskTypeFullSync:
-		err = u.fullSync(ctx, connector)
-	case domain.TaskTypeTerminate:
-		u.terminateTask(message.ConnectorID)
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	connector.LastSync = time.Now()
-
-	return nil
-}
-
-func (u *UseCase) incrementalSync(ctx context.Context, connector *domain.Connector) error {
-	// TODO: detect sync method based on the connector type
-
-	connector.Data.Parsed = &domain.LdapConnector{}
-	err := json.Unmarshal(connector.Data.Raw, connector.Data.Parsed)
-	if err != nil {
-		u.logger.Error("unable to unmarshal LDAP connector data", zap.Error(err))
-		return err
-	}
-
-	parsedConfig, ok := connector.Data.Parsed.(*domain.LdapConnector)
-	if !ok {
-		u.logger.Error("unable to unmarshal LDAP connector data", zap.Any("connector", connector))
-		return errors.New("invalid connector")
-	}
-
-	conn, err := u.ldapClient.NewConnection(parsedConfig.URL, parsedConfig.ConnectTimeout)
-	if err != nil {
-		u.logger.Error("unable to create LDAP connection", zap.Error(err))
-		return err
-	}
-	defer conn.Close()
-
-	pwd, err := u.cipher.DecryptFromStdBase64(parsedConfig.SystemAccountPassword)
-	if err != nil {
-		u.logger.Error("unable to decrypt LDAP system account password", zap.Error(err))
-		return err
-	}
-
-	err = conn.Bind(parsedConfig.SystemAccountDN, pwd)
-	if err != nil {
-		u.logger.Error("unable to bind LDAP connection", zap.Error(err))
-		return err
-	}
-
-	// TODO:
+	// TODO: Implement Mappers
 	connector.Mapper = domain.Mapper{
 		ExternalID:  "uuid",
+		Username:    "sAMAccountName",
 		FullName:    "cn",
 		PhoneNumber: "mobile",
 		Email:       "mail",
@@ -164,39 +111,112 @@ func (u *UseCase) incrementalSync(ctx context.Context, connector *domain.Connect
 		},
 	}
 
-	filter := fmt.Sprintf("(%s>=%s)", connector.Mapper.UpdatedAt, connector.LastSync.Format("20060102150405.0Z"))
-	pagingControl := ldap.NewControlPaging(parsedConfig.SyncSettings.BatchSize)
+	count := 0
+	switch message.TaskType {
+	case domain.TaskTypeIncrementalSync:
+		filter := fmt.Sprintf(
+			"(%s>=%s)",
+			connector.Mapper.UpdatedAt,
+			connector.LastSync.Format("20060102150405.0Z"),
+		)
+		count, err = u.ldapSync(ctx, connector, filter)
+	case domain.TaskTypeFullSync:
+		count, err = u.ldapSync(ctx, connector)
+	case domain.TaskTypeTerminate:
+		u.terminateTask(message.ConnectorID)
+		return nil
+	}
 
+	if err != nil {
+		return err
+	}
+
+	connector.LastSync = time.Now()
+	connector.UpdatedAt = connector.LastSync
+
+	err = u.connectorRepository.UpdateSyncInfo(ctx, connector)
+	if err != nil {
+		return err
+	}
+
+	u.logger.Info("sync successfully", zap.Int("count", count))
+	return nil
+}
+
+func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, filters ...string) (int, error) {
+	filter := ""
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+
+	connector.Data.Parsed = &domain.LdapConnector{}
+	err := json.Unmarshal(connector.Data.Raw, connector.Data.Parsed)
+	if err != nil {
+		u.logger.Error("json.Unmarshal", zap.Error(err), zap.Any("raw", connector.Data.Raw))
+		return 0, err
+	}
+
+	parsedConfig, ok := connector.Data.Parsed.(*domain.LdapConnector)
+	if !ok {
+		u.logger.Error(
+			"connector.Data.Parsed.(*domain.LdapConnector)",
+			zap.Bool("ok", ok),
+			zap.Any("parsed", connector.Data.Parsed))
+		return 0, errors.New("can not ")
+	}
+
+	conn, err := u.ldapClient.NewConnection(parsedConfig.URL, parsedConfig.ConnectTimeout)
+	if err != nil {
+		u.logger.Error("u.ldapClient.NewConnection", zap.Error(err))
+		return 0, err
+	}
+	defer conn.Close()
+
+	pwd, err := u.cipher.DecryptFromStdBase64(parsedConfig.SystemAccountPassword)
+	if err != nil {
+		u.logger.Error(
+			"u.cipher.DecryptFromStdBase64",
+			zap.Uint64("connector_id", connector.ConnectorID),
+			zap.Error(err))
+		return 0, err
+	}
+
+	err = conn.Bind(parsedConfig.SystemAccountDN, pwd)
+	if err != nil {
+		u.logger.Error("conn.Bind", zap.Error(err))
+		return 0, err
+	}
+
+	count := 0
+	pagingControl := ldap.NewControlPaging(parsedConfig.SyncSettings.BatchSize)
 	for {
-		resp, err := conn.Search(parsedConfig.BaseDN,
-			filter,
+		resp, err := conn.Search(parsedConfig.BaseDN, filter,
 			parsedConfig.ReadTimeout*time.Second,
 			ldapclient.WithScope(ldap.ScopeSingleLevel),
 			ldapclient.WithPagination(pagingControl))
 		if err != nil {
-			u.logger.Error("unable to search LDAP", zap.Error(err))
-			return err
+			u.logger.Error("conn.Search", zap.Error(err))
+			return 0, err
 		}
 
-		u.logger.Info(
-			"entries",
-			zap.Any("count", len(resp.Entries)),
-			zap.Any("control", resp.Controls),
-		)
-
 		users := make([]*domain.User, len(resp.Entries))
-		for i, e := range resp.Entries {
-			user := toUser(e, parsedConfig.UsernameAttribute, connector.Mapper)
+		for i, entry := range resp.Entries {
+			user := toUser(entry, connector.Mapper)
 			user.SourceID = &connector.ConnectorID
 			users[i] = user
 		}
 
-		_, err = u.userRepository.BulkInsertAndUpdate(ctx, users)
-		if err != nil {
-			u.logger.Error("unable to bulk insert user", zap.Error(err))
-			return err
+		if len(users) == 0 {
+			break
 		}
 
+		_, err = u.userRepository.BulkInsertAndUpdate(ctx, users)
+		if err != nil {
+			u.logger.Error("u.userRepository.BulkInsertAndUpdate", zap.Error(err))
+			return 0, err
+		}
+
+		count += len(resp.Entries)
 		updatedControl := ldap.FindControl(resp.Controls, ldap.ControlTypePaging)
 		if ctrl, ok := updatedControl.(*ldap.ControlPaging); ctrl != nil && ok && len(ctrl.Cookie) != 0 {
 			pagingControl.SetCookie(ctrl.Cookie)
@@ -205,11 +225,7 @@ func (u *UseCase) incrementalSync(ctx context.Context, connector *domain.Connect
 		break
 	}
 
-	return nil
-}
-
-func (u *UseCase) fullSync(ctx context.Context, connector *domain.Connector) error {
-	return nil
+	return count, nil
 }
 
 func (u *UseCase) terminateTask(connectorID uint64) {
@@ -237,13 +253,13 @@ func isPrior(t1, t2 domain.TaskType) bool {
 	}
 }
 
-func toUser(entry *ldap.Entry, usernameAttribute string, mapper domain.Mapper) *domain.User {
+func toUser(entry *ldap.Entry, mapper domain.Mapper) *domain.User {
 	createdAt, _ := time.Parse("20060102150405Z", entry.GetAttributeValue(mapper.CreatedAt))
 	updatedAt, _ := time.Parse("20060102150405Z", entry.GetAttributeValue(mapper.UpdatedAt))
 
 	return &domain.User{
 		FullName:    entry.GetAttributeValue(mapper.FullName),
-		Username:    entry.GetAttributeValue(usernameAttribute),
+		Username:    entry.GetAttributeValue(mapper.Username),
 		PhoneNumber: entry.GetAttributeValue(mapper.PhoneNumber),
 		Email:       entry.GetAttributeValue(mapper.Email),
 		Active:      entry.GetAttributeValue(mapper.Custom["active"]) == "9223372036854775807",

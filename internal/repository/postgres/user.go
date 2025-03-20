@@ -34,7 +34,7 @@ func (r *UserRepository) BulkInsertAndUpdate(ctx context.Context, users []*domai
 		)
 	}
 
-	query, args, err := insertQuery.ToSql()
+	query, args, err := insertQuery.Suffix("ON CONFLICT DO NOTHING").ToSql()
 	if err != nil {
 		return 0, err
 	}
