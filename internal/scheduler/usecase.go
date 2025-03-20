@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hibiken/asynq"
 	"github.com/robfig/cron/v3"
+	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/domain"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
@@ -48,10 +49,6 @@ func (u *UseCase) GetJobPeriod(connectorID uint64) (time.Duration, bool) {
 }
 
 func (u *UseCase) CreateJob(message *domain.QueueMessage, period time.Duration, queue string) error {
-	if period%time.Second != 0 {
-		period = period * time.Second
-	}
-
 	payload, err := json.Marshal(message)
 	if err != nil {
 		return err
@@ -60,8 +57,9 @@ func (u *UseCase) CreateJob(message *domain.QueueMessage, period time.Duration, 
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
-	cmd := u.enqueueTask(asynq.NewTask(queue, payload), queue)
-	jobID, err := u.scheduler.AddFunc(fmt.Sprintf("@every %s", period.String()), cmd)
+	typename := queue
+	cmd := u.enqueueTask(asynq.NewTask(typename, payload), queue)
+	jobID, err := u.scheduler.AddFunc(fmt.Sprintf("@every %s", (period*time.Second).String()), cmd)
 	if err != nil {
 		return err
 	}
@@ -75,12 +73,19 @@ func (u *UseCase) CreateJob(message *domain.QueueMessage, period time.Duration, 
 
 func (u *UseCase) RemoveJob(connectorID uint64) {
 	u.lock.Lock()
-	defer u.lock.Unlock()
 
 	jobInfo, exists := u.jobs[connectorID]
 	if exists {
 		u.scheduler.Remove(jobInfo.EntryID)
 	}
+
+	u.lock.Unlock()
+
+	payload, _ := json.Marshal(&domain.QueueMessage{
+		ConnectorID: connectorID,
+		TaskType:    domain.TaskTypeTerminate,
+	})
+	u.enqueueTask(asynq.NewTask("terminate", payload), config.TerminateQueue)()
 }
 
 func (u *UseCase) StartScheduler() {
@@ -100,7 +105,7 @@ func (u *UseCase) RemoveJobs() {
 
 func (u *UseCase) enqueueTask(task *asynq.Task, queue string) func() {
 	return func() {
-		task, err := u.asynqClient.Enqueue(task,
+		t, err := u.asynqClient.Enqueue(task,
 			asynq.MaxRetry(0),
 			asynq.Retention(5*time.Minute),
 			asynq.Queue(queue))
@@ -108,10 +113,10 @@ func (u *UseCase) enqueueTask(task *asynq.Task, queue string) func() {
 			u.logger.Error(
 				"SchedulerUsecase -  enqueueTask - u.asynqClient.Enqueue",
 				zap.Error(err),
-				zap.String("task", string(task.Payload)),
+				zap.Any("task", task.Payload),
 			)
 		}
 
-		u.logger.Info("enqueue new task", zap.Any("task", task))
+		u.logger.Info("enqueue new task", zap.Any("task", t))
 	}
 }

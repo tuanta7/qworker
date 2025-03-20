@@ -42,6 +42,7 @@ func (r *UserRepository) BulkUpsert(ctx context.Context, users []*domain.User) (
 			"phone_number = EXCLUDED.phone_number, " +
 			"email = EXCLUDED.email, " +
 			"data = EXCLUDED.data, " +
+			"source_id = EXCLUDED.source_id, " +
 			"created_at = EXCLUDED.created_at, " +
 			"updated_at = EXCLUDED.updated_at ",
 	).ToSql()

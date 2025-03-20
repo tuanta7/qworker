@@ -62,7 +62,7 @@ func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) err
 			zap.Any("currentTaskType", task.Type),
 			zap.Any("newTaskType", message.TaskType),
 		)
-		u.terminateTask(message.ConnectorID)
+		u.TerminateTask(message.ConnectorID)
 	}
 
 	u.runningTask[message.ConnectorID] = &domain.Task{
@@ -98,7 +98,7 @@ func (u *UseCase) runTask(ctx context.Context, message *domain.QueueMessage) err
 		return err
 	}
 
-	// TODO: Implement Mappers
+	// TODO: Implement attribute mappers
 	connector.Mapper = domain.Mapper{
 		ExternalID:  "uuid",
 		Username:    "sAMAccountName",
@@ -113,23 +113,14 @@ func (u *UseCase) runTask(ctx context.Context, message *domain.QueueMessage) err
 	}
 
 	count := 0
-	switch message.TaskType {
-	case domain.TaskTypeIncrementalSync:
-		filter := fmt.Sprintf(
-			"(%s>=%s)",
-			connector.Mapper.UpdatedAt,
-			connector.LastSync.Format("20060102150405.0Z"),
-		)
-		count, err = u.ldapSync(ctx, connector, filter)
-	case domain.TaskTypeFullSync:
-		count, err = u.ldapSync(ctx, connector)
-	case domain.TaskTypeTerminate:
-		u.terminateTask(message.ConnectorID)
-		return nil
-	}
-
-	if err != nil {
-		return err
+	switch connector.ConnectorType {
+	case domain.ConnectorTypeLDAP:
+		count, err = u.runLdapSyncTask(ctx, message, connector)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.New("unsupported connector type")
 	}
 
 	connector.LastSync = time.Now()
@@ -142,6 +133,24 @@ func (u *UseCase) runTask(ctx context.Context, message *domain.QueueMessage) err
 
 	u.logger.Info("sync successfully", zap.Int("count", count))
 	return nil
+}
+
+func (u *UseCase) runLdapSyncTask(ctx context.Context, msg *domain.QueueMessage, c *domain.Connector) (count int, err error) {
+	switch msg.TaskType {
+	case domain.TaskTypeIncrementalSync:
+		filter := fmt.Sprintf(
+			"(%s>=%s)",
+			c.Mapper.UpdatedAt,
+			c.LastSync.Format("20060102150405.0Z"),
+		)
+		count, err = u.ldapSync(ctx, c, filter)
+	case domain.TaskTypeFullSync:
+		count, err = u.ldapSync(ctx, c)
+	case domain.TaskTypeTerminate:
+		u.TerminateTask(msg.ConnectorID)
+		return 0, nil
+	}
+	return count, nil
 }
 
 func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, filters ...string) (int, error) {
@@ -163,10 +172,10 @@ func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, fil
 			"connector.Data.Parsed.(*domain.LdapConnector)",
 			zap.Bool("ok", ok),
 			zap.Any("parsed", connector.Data.Parsed))
-		return 0, errors.New("can not ")
+		return 0, errors.New("cannot assert data to type *domain.LdapConnector")
 	}
 
-	conn, err := u.ldapClient.NewConnection(parsedConfig.URL, parsedConfig.ConnectTimeout)
+	conn, err := u.ldapClient.NewConnection(parsedConfig.URL, parsedConfig.ConnectTimeout*time.Millisecond)
 	if err != nil {
 		u.logger.Error("u.ldapClient.NewConnection", zap.Error(err))
 		return 0, err
@@ -210,7 +219,7 @@ func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, fil
 		_, err = u.userRepository.BulkUpsert(ctx, users)
 		if err != nil {
 			if errors.Is(err, utils.ErrNoUserProvided) {
-				u.logger.Info("userRepository.BulkUpsert", zap.Error(err))
+				u.logger.Info(err.Error())
 				break
 			}
 			u.logger.Error("u.userRepository.BulkUpsert", zap.Error(err))
@@ -229,7 +238,7 @@ func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, fil
 	return count, nil
 }
 
-func (u *UseCase) terminateTask(connectorID uint64) {
+func (u *UseCase) TerminateTask(connectorID uint64) {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 

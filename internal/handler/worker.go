@@ -9,7 +9,6 @@ import (
 	"github.com/hibiken/asynq"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/logger"
-	"go.uber.org/zap"
 )
 
 type WorkerHandler struct {
@@ -26,7 +25,26 @@ func NewWorkerHandler(workerUC *workeruc.UseCase, connectorUC *connectoruc.UseCa
 	}
 }
 
+func (h *WorkerHandler) HandleTerminateSync(ctx context.Context, task *asynq.Task) error {
+	message := &domain.QueueMessage{}
+	err := json.Unmarshal(task.Payload(), message)
+	if err != nil {
+		return err
+	}
+
+	h.workerUC.TerminateTask(message.ConnectorID)
+	return nil
+}
+
 func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asynq.Task) error {
+	return h.handleUserSync(ctx, task)
+}
+
+func (h *WorkerHandler) HandleUserFullSync(ctx context.Context, task *asynq.Task) error {
+	return h.handleUserSync(ctx, task)
+}
+
+func (h *WorkerHandler) handleUserSync(ctx context.Context, task *asynq.Task) error {
 	message := &domain.QueueMessage{}
 	err := json.Unmarshal(task.Payload(), message)
 	if err != nil {
@@ -37,16 +55,5 @@ func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asy
 	if err != nil {
 		return err
 	}
-
-	return nil
-}
-
-func (h *WorkerHandler) HandleUserFullSync(ctx context.Context, task *asynq.Task) error {
-	h.logger.Info("WorkerHandler - HandleUserFullSync", zap.Any("task", task.Payload()))
-	return nil
-}
-
-func (h *WorkerHandler) HandleTerminateSync(ctx context.Context, task *asynq.Task) error {
-	h.logger.Info("WorkerHandler - HandleUserSync", zap.Any("task", task.Payload()))
 	return nil
 }

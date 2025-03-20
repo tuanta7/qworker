@@ -10,8 +10,8 @@ import (
 type ConnectorType string
 
 const (
-	ConnectorTypeLDAP ConnectorType = "LDAP"
-	ConnectorTypeSCIM ConnectorType = "SCIM"
+	ConnectorTypeLDAP ConnectorType = "ldap"
+	ConnectorTypeSCIM ConnectorType = "scim"
 )
 
 type Connector struct {
