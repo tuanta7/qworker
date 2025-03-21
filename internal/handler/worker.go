@@ -3,12 +3,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"github.com/hibiken/asynq"
+	"github.com/tuanta7/qworker/config"
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/domain"
-
-	"github.com/hibiken/asynq"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/logger"
+	"github.com/tuanta7/qworker/pkg/utils"
 )
 
 type WorkerHandler struct {
@@ -25,35 +26,37 @@ func NewWorkerHandler(workerUC *workeruc.UseCase, connectorUC *connectoruc.UseCa
 	}
 }
 
-func (h *WorkerHandler) HandleTerminateSync(ctx context.Context, task *asynq.Task) error {
+func (h *WorkerHandler) HandleTask(ctx context.Context, task *asynq.Task) error {
 	message := &domain.QueueMessage{}
 	err := json.Unmarshal(task.Payload(), message)
+	if err != nil {
+		// Shut down task and remove from queue
+		return nil
+	}
+
+	// Prevent failed task staying in queue
+	defer h.workerUC.CleanTask(message.Queue, message.ConnectorID)
+
+	currentQueue, err := h.workerUC.IsTaskRunning(message.ConnectorID)
 	if err != nil {
 		return err
 	}
 
-	h.workerUC.TerminateTask(message.ConnectorID)
-	return nil
-}
+	if currentQueue != "" {
+		if config.Queues[currentQueue] >= config.Queues[message.Queue] {
+			return utils.ErrTaskConflict
+		}
 
-func (h *WorkerHandler) HandleUserIncrementalSync(ctx context.Context, task *asynq.Task) error {
-	return h.handleUserSync(ctx, task)
-}
-
-func (h *WorkerHandler) HandleUserFullSync(ctx context.Context, task *asynq.Task) error {
-	return h.handleUserSync(ctx, task)
-}
-
-func (h *WorkerHandler) handleUserSync(ctx context.Context, task *asynq.Task) error {
-	message := &domain.QueueMessage{}
-	err := json.Unmarshal(task.Payload(), message)
-	if err != nil {
-		return err
+		err = h.workerUC.TerminateTask(message.Queue, message.ConnectorID)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = h.workerUC.RunTask(ctx, message)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

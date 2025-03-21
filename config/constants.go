@@ -1,7 +1,15 @@
 package config
 
 const (
-	IncrementalSyncQueue = "incremental_sync"
-	FullSyncQueue        = "full_sync"
-	TerminateQueue       = "terminate"
+	CriticalQueue = "critical"
+	DefaultQueue  = "default"
+	LowQueue      = "low"
+)
+
+var (
+	Queues = map[string]int{
+		CriticalQueue: 3,
+		DefaultQueue:  2,
+		LowQueue:      1,
+	}
 )

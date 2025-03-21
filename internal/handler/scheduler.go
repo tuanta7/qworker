@@ -40,9 +40,10 @@ func (h *SchedulerHandler) HandleInsertConnector(ctx context.Context, connectorI
 	message := &domain.QueueMessage{
 		ConnectorID: connector.ConnectorID,
 		TaskType:    domain.TaskTypeIncrementalSync,
+		Queue:       config.LowQueue,
 	}
 
-	err = h.schedulerUC.CreateJob(message, settings.IncSyncPeriod, config.IncrementalSyncQueue)
+	err = h.schedulerUC.CreateCronJob(settings.IncSyncPeriod, message)
 	if err != nil {
 		return err
 	}
@@ -58,7 +59,7 @@ func (h *SchedulerHandler) HandleUpdateConnector(ctx context.Context, connectorI
 	}
 
 	if !connector.Enabled {
-		h.schedulerUC.RemoveJob(connectorID)
+		h.schedulerUC.RemoveCronJob(connectorID)
 		return nil
 	}
 
@@ -68,24 +69,25 @@ func (h *SchedulerHandler) HandleUpdateConnector(ctx context.Context, connectorI
 	}
 
 	if !settings.IncSync {
-		h.schedulerUC.RemoveJob(connectorID)
+		h.schedulerUC.RemoveCronJob(connectorID)
 		return nil
 	}
 
-	currentPeriod, exists := h.schedulerUC.GetJobPeriod(connectorID)
+	currentPeriod, exists := h.schedulerUC.GetCronJobPeriod(connectorID)
 	if exists {
 		if currentPeriod == settings.IncSyncPeriod {
 			return nil
 		}
-		h.schedulerUC.RemoveJob(connectorID)
+		h.schedulerUC.RemoveCronJob(connectorID)
 	}
 
 	message := &domain.QueueMessage{
 		ConnectorID: connector.ConnectorID,
 		TaskType:    domain.TaskTypeIncrementalSync,
+		Queue:       config.LowQueue,
 	}
 
-	err = h.schedulerUC.CreateJob(message, settings.IncSyncPeriod, config.IncrementalSyncQueue)
+	err = h.schedulerUC.CreateCronJob(settings.IncSyncPeriod, message)
 	if err != nil {
 		return err
 	}
@@ -95,11 +97,11 @@ func (h *SchedulerHandler) HandleUpdateConnector(ctx context.Context, connectorI
 }
 
 func (h *SchedulerHandler) HandleDeleteConnector(ctx context.Context, connectorID uint64) {
-	h.schedulerUC.RemoveJob(connectorID)
+	_ = h.schedulerUC.RemoveCronJob(connectorID)
 }
 
 func (h *SchedulerHandler) InitJobs(ctx context.Context) error {
-	connectors, err := h.connectorUC.ListEnabledConnectors(ctx)
+	connectors, err := h.connectorUC.ListEnabled(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,6 +110,7 @@ func (h *SchedulerHandler) InitJobs(ctx context.Context) error {
 		message := &domain.QueueMessage{
 			ConnectorID: connector.ConnectorID,
 			TaskType:    domain.TaskTypeIncrementalSync,
+			Queue:       config.LowQueue,
 		}
 
 		settings, err := connector.GetSyncSettings()
@@ -115,7 +118,7 @@ func (h *SchedulerHandler) InitJobs(ctx context.Context) error {
 			return err
 		}
 
-		err = h.schedulerUC.CreateJob(message, settings.IncSyncPeriod, config.IncrementalSyncQueue)
+		err = h.schedulerUC.CreateCronJob(settings.IncSyncPeriod, message)
 		if err != nil {
 			return err
 		}
@@ -126,5 +129,5 @@ func (h *SchedulerHandler) InitJobs(ctx context.Context) error {
 }
 
 func (h *SchedulerHandler) RemoveJobs() {
-	h.schedulerUC.RemoveJobs()
+	h.schedulerUC.RemoveCronJobs()
 }

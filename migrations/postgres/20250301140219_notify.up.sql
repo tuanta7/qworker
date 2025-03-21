@@ -1,20 +1,31 @@
 CREATE SCHEMA IF NOT EXISTS private
 
-CREATE TABLE IF NOT EXISTS private.connector
-(
-    id             SERIAL PRIMARY KEY,
-    connector_type VARCHAR(255) NOT NULL,
-    display_name   VARCHAR(255) NOT NULL,
-    enabled        BOOLEAN               DEFAULT false,
-    last_sync      TIMESTAMP,
-    data           TEXT,
-    created_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
-    updated_at     TIMESTAMP    NOT NULL DEFAULT NOW()
-);
+    CREATE TABLE IF NOT EXISTS private.connector
+    (
+        id             SERIAL PRIMARY KEY,
+        connector_type VARCHAR(255) NOT NULL,
+        display_name   VARCHAR(255) NOT NULL,
+        enabled        BOOLEAN               DEFAULT false,
+        last_sync      TIMESTAMP,
+        data           TEXT,
+        created_at     TIMESTAMP    NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMP    NOT NULL DEFAULT NOW()
+    );
 
 CREATE FUNCTION private.notify_connector_changes() RETURNS TRIGGER AS
 $$
 BEGIN
+    IF TG_OP = 'UPDATE' AND (
+        OLD.display_name = NEW.display_name AND
+        OLD.enabled = NEW.enabled AND
+        OLD.data = NEW.data AND
+        OLD.last_sync != NEW.last_sync AND
+        NEW.updated_at = NEW.last_sync
+        )
+    THEN
+        RETURN NEW; -- Do nothing if only ignored fields are updated
+    END IF;
+
     PERFORM pg_notify('connectors_changes', jsonb_build_object(
             'table', TG_TABLE_NAME,
             'action', TG_OP,

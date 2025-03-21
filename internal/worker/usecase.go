@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
+	"github.com/hibiken/asynq"
+	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/pkg/cipherx"
@@ -13,13 +15,12 @@ import (
 	"github.com/tuanta7/qworker/pkg/logger"
 	"github.com/tuanta7/qworker/pkg/utils"
 	"go.uber.org/zap"
-	"sync"
+	"strconv"
 	"time"
 )
 
 type UseCase struct {
-	lock                *sync.Mutex
-	runningTask         map[uint64]*domain.Task
+	asynqInspector      *asynq.Inspector
 	ldapClient          *ldapclient.LDAPClient
 	cipher              cipherx.Cipher
 	connectorRepository *pgrepo.ConnectorRepository
@@ -28,6 +29,7 @@ type UseCase struct {
 }
 
 func NewUseCase(
+	asynqInspector *asynq.Inspector,
 	ldapClient *ldapclient.LDAPClient,
 	cipher cipherx.Cipher,
 	connectorRepository *pgrepo.ConnectorRepository,
@@ -35,8 +37,7 @@ func NewUseCase(
 	zl *logger.ZapLogger,
 ) *UseCase {
 	return &UseCase{
-		lock:                &sync.Mutex{},
-		runningTask:         make(map[uint64]*domain.Task),
+		asynqInspector:      asynqInspector,
 		ldapClient:          ldapClient,
 		cipher:              cipher,
 		connectorRepository: connectorRepository,
@@ -45,54 +46,33 @@ func NewUseCase(
 	}
 }
 
-func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) error {
-	c, cancel := context.WithCancel(ctx)
-	defer cancel()
+func (u *UseCase) IsTaskRunning(connectorID uint64) (string, error) {
+	for q := range config.Queues {
+		taskID := fmt.Sprintf("asynq{%s}:t:%d", q, connectorID)
 
-	u.lock.Lock()
-	task, exist := u.runningTask[message.ConnectorID]
-
-	if exist {
-		if isPrior(message.TaskType, task.Type) {
-			u.lock.Unlock()
-			u.logger.Error("a task with equal or higher priority is currently running", zap.Any("task", task))
-			return fmt.Errorf("equal or higher priority task is running")
+		tasks, err := u.asynqInspector.ListActiveTasks(q) // get max 30 tasks by default
+		if err != nil {
+			u.logger.Error("u.asynqInspector.ListActiveTasks", zap.Error(err), zap.String("queue", q))
+			if errors.Is(err, asynq.ErrQueueNotFound) {
+				continue
+			}
+			return "", err
 		}
-		u.logger.Info("overriding the current task",
-			zap.Any("currentTaskType", task.Type),
-			zap.Any("newTaskType", message.TaskType),
-		)
-		u.TerminateTask(message.ConnectorID)
-	}
 
-	u.runningTask[message.ConnectorID] = &domain.Task{
-		Type:      message.TaskType,
-		Cancel:    cancel,
-		StartedAt: time.Now(),
-	}
-	defer delete(u.runningTask, message.ConnectorID)
-	u.lock.Unlock()
-
-	done := make(chan error)
-	go func(ctx context.Context, m *domain.QueueMessage) {
-		defer close(done)
-		if err := u.runTask(ctx, m); err != nil {
-			done <- err
+		for _, t := range tasks {
+			if t.ID == taskID {
+				return q, nil
+			}
 		}
-	}(c, message)
-
-	select {
-	case <-c.Done():
-		return c.Err()
-	case err := <-done: // also unblocked when done is closed
-		return err
 	}
+	return "", nil
 }
 
-func (u *UseCase) runTask(ctx context.Context, message *domain.QueueMessage) error {
-	u.lock.Lock()
-	defer u.lock.Unlock()
+func (u *UseCase) TerminateTask(queue string, connectorID uint64) error {
+	return nil
+}
 
+func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) error {
 	connector, err := u.connectorRepository.GetByID(ctx, message.ConnectorID)
 	if err != nil {
 		return err
@@ -131,8 +111,12 @@ func (u *UseCase) runTask(ctx context.Context, message *domain.QueueMessage) err
 		return err
 	}
 
-	u.logger.Info("sync successfully", zap.Int("count", count))
+	u.logger.Info("user synced successfully", zap.Int("count", count))
 	return nil
+}
+
+func (u *UseCase) CleanTask(queue string, connectorID uint64) error {
+	return u.asynqInspector.DeleteTask(queue, strconv.FormatUint(connectorID, 10))
 }
 
 func (u *UseCase) runLdapSyncTask(ctx context.Context, msg *domain.QueueMessage, c *domain.Connector) (count int, err error) {
@@ -147,7 +131,7 @@ func (u *UseCase) runLdapSyncTask(ctx context.Context, msg *domain.QueueMessage,
 	case domain.TaskTypeFullSync:
 		count, err = u.ldapSync(ctx, c)
 	case domain.TaskTypeTerminate:
-		u.TerminateTask(msg.ConnectorID)
+		// u.TerminateTask(msg.ConnectorID)
 		return 0, nil
 	}
 	return count, nil
@@ -236,31 +220,6 @@ func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, fil
 	}
 
 	return count, nil
-}
-
-func (u *UseCase) TerminateTask(connectorID uint64) {
-	u.lock.Lock()
-	defer u.lock.Unlock()
-
-	job, exists := u.runningTask[connectorID]
-	if exists && job.Cancel != nil {
-		job.Cancel()
-		delete(u.runningTask, connectorID)
-	}
-}
-
-// isPrior check if t2 has higher priority than t1
-func isPrior(t1, t2 domain.TaskType) bool {
-	switch t1 {
-	case domain.TaskTypeIncrementalSync:
-		return t2 == domain.TaskTypeFullSync || t2 == domain.TaskTypeTerminate
-	case domain.TaskTypeFullSync:
-		return t2 == domain.TaskTypeTerminate
-	case domain.TaskTypeTerminate:
-		return false
-	default:
-		return true
-	}
 }
 
 func toUser(entry *ldap.Entry, mapper domain.Mapper) *domain.User {

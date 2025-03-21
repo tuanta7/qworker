@@ -8,6 +8,7 @@ import (
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/handler"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
+	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
 	scheduleruc "github.com/tuanta7/qworker/internal/scheduler"
 	"github.com/tuanta7/qworker/pkg/db"
 	"github.com/tuanta7/qworker/pkg/logger"
@@ -23,17 +24,19 @@ func main() {
 	pgClient := db.MustNewPostgresClient(cfg)
 	defer pgClient.Close()
 
-	asynqClient := asynq.NewClient(asynq.RedisFailoverClientOpt{
-		MasterName:    cfg.Redis.MasterName,
-		SentinelAddrs: cfg.Redis.Sentinels,
-		Password:      cfg.Redis.Password,
-		DB:            cfg.Redis.Database,
-	})
+	redisClient := db.MustNewRedisSentinelClient(cfg)
+	defer redisClient.Close()
+
+	asynqClient := asynq.NewClientFromRedisClient(redisClient)
 	defer asynqClient.Close()
 
+	asynqInspector := asynq.NewInspectorFromRedisClient(redisClient)
+	defer asynqInspector.Close()
+
+	taskRepository := redisrepo.NewTaskRepository(redisClient)
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
 	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zapLogger)
-	schedulerUsecase := scheduleruc.NewUseCase(asynqClient, zapLogger)
+	schedulerUsecase := scheduleruc.NewUseCase(asynqClient, asynqInspector, taskRepository, zapLogger)
 	schedulerHandler := handler.NewSchedulerHandler(cfg, schedulerUsecase, connectorUsecase)
 
 	err := schedulerHandler.InitJobs(context.Background())

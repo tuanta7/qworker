@@ -20,7 +20,7 @@ func NewUseCase(connectorRepo *pgrepo.ConnectorRepository, zl *logger.ZapLogger)
 	}
 }
 
-func (u *UseCase) ListEnabledConnectors(ctx context.Context) ([]*domain.Connector, error) {
+func (u *UseCase) ListEnabled(ctx context.Context) ([]*domain.Connector, error) {
 	connectors, err := u.connectorRepo.ListByEnabled(ctx, true)
 	if err != nil {
 		u.logger.Error(

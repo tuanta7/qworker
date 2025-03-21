@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"log"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,10 +45,10 @@ func NewPostgresClient(cfg *config.Config, opts ...PostgresOption) (*PostgresCli
 	}, nil
 }
 
-func MustNewPostgresClient(cfg *config.Config) *PostgresClient {
-	client, err := NewPostgresClient(cfg)
+func MustNewPostgresClient(cfg *config.Config, opts ...PostgresOption) *PostgresClient {
+	client, err := NewPostgresClient(cfg, opts...)
 	if err != nil {
-		panic(err)
+		log.Fatalf("NewPostgresClient(): %s", err)
 	}
 	return client
 }

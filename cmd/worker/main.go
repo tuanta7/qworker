@@ -2,14 +2,14 @@ package main
 
 import (
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
+	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
+	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/cipherx"
 	"github.com/tuanta7/qworker/pkg/ldapclient"
 	"log"
 
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
-	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
-	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/db"
 	"github.com/tuanta7/qworker/pkg/logger"
 )
@@ -19,10 +19,10 @@ func main() {
 
 	aead, err := cipherx.New([]byte(cfg.AesGsmSecret), cipherx.AEAD)
 	if err != nil {
-		log.Fatalf("cipherx.New(): %v", err)
+		log.Fatalf("cipherx.New: %v", err)
 	}
 
-	zapLogger := logger.MustNewLogger(cfg.Logger.Level)
+	zl := logger.MustNewLogger(cfg.Logger.Level)
 	ldapClient := ldapclient.NewLDAPClient(cfg.StartTLSConfig.SkipVerify)
 
 	pgClient, err := db.NewPostgresClient(cfg, db.WithMaxConns(10))
@@ -31,28 +31,25 @@ func main() {
 	}
 	defer pgClient.Close()
 
-	userRepository := pgrepo.NewUserRepository(pgClient)
-	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
-	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zapLogger)
-	workerUsecase := workeruc.NewUseCase(ldapClient, aead, connectorRepository, userRepository, zapLogger)
+	redisClient := db.MustNewRedisSentinelClient(cfg)
+	defer redisClient.Close()
 
-	srv := asynq.NewServer(
-		asynq.RedisFailoverClientOpt{
-			MasterName:    cfg.Redis.MasterName,
-			SentinelAddrs: cfg.Redis.Sentinels,
-			Password:      cfg.Redis.Password,
-			DB:            cfg.Redis.Database,
-		},
+	srv := asynq.NewServerFromRedisClient(redisClient,
 		asynq.Config{
-			Concurrency: 10,
-			Queues: map[string]int{
-				config.TerminateQueue:       6,
-				config.FullSyncQueue:        3,
-				config.IncrementalSyncQueue: 1,
-			},
+			Concurrency:    10,
+			StrictPriority: true,
+			Queues:         config.Queues,
 		})
 
-	mux := NewRouter(cfg, zapLogger, workerUsecase, connectorUsecase)
+	asynqInspector := asynq.NewInspectorFromRedisClient(redisClient)
+	defer asynqInspector.Close()
+
+	userRepository := pgrepo.NewUserRepository(pgClient)
+	connectorRepository := pgrepo.NewConnectorRepository(pgClient)
+	connectorUsecase := connectoruc.NewUseCase(connectorRepository, zl)
+	workerUsecase := workeruc.NewUseCase(asynqInspector, ldapClient, aead, connectorRepository, userRepository, zl)
+
+	mux := NewRouter(cfg, zl, workerUsecase, connectorUsecase)
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("asynq server stopped: %v", err)
 	}
