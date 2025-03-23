@@ -8,13 +8,13 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
-const envPrefix = "QWORKER"
+const envPrefix = "Q_WORKER"
 
 type Config struct {
 	ServerName     string `envconfig:"SERVER_NAME" default:"worker"`
 	ServerHost     string `envconfig:"SERVER_HOST" default:"localhost"`
 	ServerPort     uint32 `envconfig:"SERVER_PORT" default:"8080"`
-	AesGsmSecret   string `envconfig:"AESGSM_SECRET" default:"1234567887654321"`
+	AesGsmSecret   string `envconfig:"AES_GSM_SECRET" default:"1234567887654321"`
 	Logger         *LoggerConfig
 	StartTLSConfig *StartTLSConfig
 	Postgres       *PostgresConfig

@@ -5,12 +5,6 @@ import (
 	"time"
 )
 
-const (
-	TaskTypeIncrementalSync = "user:incremental_sync"
-	TaskTypeFullSync        = "user:full_sync"
-	TaskTypeTerminate       = "user:sync_terminate"
-)
-
 type QueueMessage struct {
 	ConnectorID uint64 `json:"connector_id"`
 	TaskType    string `json:"task_type"`

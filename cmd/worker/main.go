@@ -2,6 +2,7 @@ package main
 
 import (
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
+	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
 	"github.com/tuanta7/qworker/pkg/cipherx"
@@ -38,7 +39,7 @@ func main() {
 		asynq.Config{
 			Concurrency:    10,
 			StrictPriority: true,
-			Queues:         config.Queues,
+			Queues:         domain.QueuePriority,
 		})
 
 	asynqInspector := asynq.NewInspectorFromRedisClient(redisClient)

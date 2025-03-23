@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/hibiken/asynq"
-	"github.com/tuanta7/qworker/config"
 	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/domain"
 	workeruc "github.com/tuanta7/qworker/internal/worker"
@@ -37,13 +36,13 @@ func (h *WorkerHandler) HandleTask(ctx context.Context, task *asynq.Task) error 
 	// Prevent failed task staying in queue
 	defer h.workerUC.CleanTask(message.Queue, message.ConnectorID)
 
-	currentQueue, err := h.workerUC.IsTaskRunning(message.ConnectorID)
+	currentTask, err := h.workerUC.IsConnectorRunning(message.ConnectorID)
 	if err != nil {
 		return err
 	}
 
-	if currentQueue != "" {
-		if config.Queues[currentQueue] >= config.Queues[message.Queue] {
+	if currentTask != nil {
+		if domain.QueuePriority[currentTask.Queue] >= domain.QueuePriority[message.Queue] {
 			return utils.ErrTaskConflict
 		}
 

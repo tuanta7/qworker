@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/hibiken/asynq"
-	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/domain"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/pkg/cipherx"
@@ -46,30 +45,35 @@ func NewUseCase(
 	}
 }
 
-func (u *UseCase) IsTaskRunning(connectorID uint64) (string, error) {
-	for q := range config.Queues {
-		taskID := fmt.Sprintf("asynq{%s}:t:%d", q, connectorID)
+func (u *UseCase) IsConnectorRunning(connectorID uint64) (*asynq.TaskInfo, error) {
+	for queue := range domain.QueuePriority {
+		taskID := fmt.Sprintf("asynq{%s}:t:%d", queue, connectorID)
 
-		tasks, err := u.asynqInspector.ListActiveTasks(q) // get max 30 tasks by default
+		tasks, err := u.asynqInspector.ListActiveTasks(queue) // get max 30 tasks by default
 		if err != nil {
-			u.logger.Error("u.asynqInspector.ListActiveTasks", zap.Error(err), zap.String("queue", q))
+			u.logger.Error("u.asynqInspector.ListActiveTasks", zap.Error(err), zap.String("queue", queue))
 			if errors.Is(err, asynq.ErrQueueNotFound) {
 				continue
 			}
-			return "", err
+			return nil, err
 		}
 
-		for _, t := range tasks {
-			if t.ID == taskID {
-				return q, nil
+		for _, task := range tasks {
+			if task.ID == taskID {
+				return task, nil
 			}
 		}
 	}
-	return "", nil
+
+	return nil, nil
 }
 
 func (u *UseCase) TerminateTask(queue string, connectorID uint64) error {
 	return nil
+}
+
+func (u *UseCase) CleanTask(queue string, connectorID uint64) error {
+	return u.asynqInspector.DeleteTask(queue, strconv.FormatUint(connectorID, 10))
 }
 
 func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) error {
@@ -113,10 +117,6 @@ func (u *UseCase) RunTask(ctx context.Context, message *domain.QueueMessage) err
 
 	u.logger.Info("user synced successfully", zap.Int("count", count))
 	return nil
-}
-
-func (u *UseCase) CleanTask(queue string, connectorID uint64) error {
-	return u.asynqInspector.DeleteTask(queue, strconv.FormatUint(connectorID, 10))
 }
 
 func (u *UseCase) runLdapSyncTask(ctx context.Context, msg *domain.QueueMessage, c *domain.Connector) (count int, err error) {

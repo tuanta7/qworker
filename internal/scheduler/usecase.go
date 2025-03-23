@@ -81,7 +81,7 @@ func (u *UseCase) tryEnqueueTask(message *domain.QueueMessage, queue string) fun
 		payload, _ := json.Marshal(message)
 
 		task, err := u.asynqClient.Enqueue(
-			asynq.NewTask(string(message.TaskType), payload),
+			asynq.NewTask(message.TaskType, payload),
 			asynq.TaskID(strconv.FormatUint(message.ConnectorID, 10)),
 			asynq.Queue(queue),
 			asynq.MaxRetry(0),
@@ -108,10 +108,15 @@ func (u *UseCase) RemoveCronJob(connectorID uint64) error {
 	u.lock.Unlock()
 
 	// TODO: Stop processing/pending tasks
+	err := u.asynqInspector.CancelProcessing(strconv.FormatUint(connectorID, 10))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (u *UseCase) RemoveCronJobs() {
+func (u *UseCase) ClearCronJobs() {
 	u.cronScheduler.Stop()
 	for _, e := range u.cronScheduler.Entries() {
 		u.cronScheduler.Remove(e.ID)

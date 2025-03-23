@@ -39,11 +39,11 @@ func main() {
 	schedulerUsecase := scheduleruc.NewUseCase(asynqClient, asynqInspector, taskRepository, zapLogger)
 	schedulerHandler := handler.NewSchedulerHandler(cfg, schedulerUsecase, connectorUsecase)
 
-	err := schedulerHandler.InitJobs(context.Background())
+	err := schedulerHandler.InitCronJobs(context.Background())
 	if err != nil {
 		log.Fatalf("schedulerHandler.InitScheduledJobs(): %v", err)
 	}
-	defer schedulerHandler.RemoveJobs()
+	defer schedulerHandler.ClearCronJobs()
 
 	// Block the main goroutine and listen
 	listen(pgClient, zapLogger, schedulerHandler)
