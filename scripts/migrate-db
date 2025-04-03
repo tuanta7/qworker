@@ -1,0 +1,34 @@
+#!/bin/bash
+
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+
+function create-db-migration() {
+  migrate create -ext sql -dir "${MIGRATION_FOLDER}" "$1"
+  echo Generate db migration successfully!!!
+}
+
+function upgrade-db-migration() {
+    migrate -path "${MIGRATION_FOLDER}" -database "${POSTGRESQL_URI}" up
+    echo Upgrade db migration successfully!!!
+}
+
+function downgrade-db-migrate() {
+    migrate -path "${MIGRATION_FOLDER}" -database "${POSTGRESQL_URI}" down 1
+    echo Downgrade db migration successfully!!!
+}
+
+case $1 in
+  create)
+    create-db-migration "$2"
+  ;;
+  up)
+    upgrade-db-migration
+  ;;
+  down)
+    downgrade-db-migrate
+  ;;
+  *)
+    echo -e "${RED}>>> Unknown command"
+  ;;
+esac
