@@ -18,7 +18,7 @@ import (
 
 type UseCase struct {
 	asynqInspector      *asynq.Inspector
-	ldapClient          *ldapclient.LDAPClient
+	ldapClient          ldapclient.LDAPClient
 	cipher              cipherx.Cipher
 	connectorRepository *pgrepo.ConnectorRepository
 	userRepository      *pgrepo.UserRepository
@@ -27,7 +27,7 @@ type UseCase struct {
 
 func NewUseCase(
 	asynqInspector *asynq.Inspector,
-	ldapClient *ldapclient.LDAPClient,
+	ldapClient ldapclient.LDAPClient,
 	cipher cipherx.Cipher,
 	connectorRepository *pgrepo.ConnectorRepository,
 	userRepository *pgrepo.UserRepository,

@@ -12,21 +12,23 @@ import (
 )
 
 type Scheduler struct {
-	pgClient *db.PostgresClient
+	pgClient db.PostgresClient
 	zl       *logger.ZapLogger
-	handlers map[string]func(c context.Context, msg *domain.NotifyMessage) error
+	handlers map[string]SchedulerHandlerFunc
 }
 
-func NewScheduler(pgClient *db.PostgresClient, zl *logger.ZapLogger) *Scheduler {
+type SchedulerHandlerFunc func(c context.Context, msg *domain.NotifyMessage) error
+
+func NewScheduler(pgClient db.PostgresClient, zl *logger.ZapLogger) *Scheduler {
 	return &Scheduler{
 		pgClient: pgClient,
 		zl:       zl,
-		handlers: make(map[string]func(c context.Context, msg *domain.NotifyMessage) error),
+		handlers: make(map[string]SchedulerHandlerFunc),
 	}
 }
 
-func (s *Scheduler) Listen(ctx context.Context, channelName string) {
-	conn, err := s.pgClient.Pool.Acquire(ctx)
+func (s *Scheduler) Listen(ctx context.Context, channelName string, buffer int) {
+	conn, err := s.pgClient.Pool().Acquire(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -38,7 +40,7 @@ func (s *Scheduler) Listen(ctx context.Context, channelName string) {
 	}
 	defer conn.Exec(ctx, "UNLISTEN "+channelName)
 
-	notifyChan := make(chan string, 10)
+	notifyChan := make(chan string, buffer)
 	go s.ProcessNotifications(notifyChan)
 
 	for {
@@ -63,13 +65,15 @@ func (s *Scheduler) ProcessNotifications(notifyChan <-chan string) {
 		err := json.Unmarshal([]byte(n), message)
 		if err != nil {
 			s.zl.Error("failed to unmarshal notification message", zap.Error(err))
+			continue
 		}
 
 		requestHandler, exists := s.handlers[strings.ToLower(message.Action)]
 		if exists {
-			err = requestHandler(context.Background(), message)
+			err = requestHandler(context.TODO(), message)
 			if err != nil {
 				s.zl.Warn("error while handling trigger action", zap.Error(err))
+				continue
 			}
 		} else {
 			s.zl.Error("unknown action", zap.String("action", message.Action))
@@ -79,7 +83,7 @@ func (s *Scheduler) ProcessNotifications(notifyChan <-chan string) {
 
 func (s *Scheduler) RegisterHandler(action string, handler func(c context.Context, msg *domain.NotifyMessage) error) {
 	if s.handlers == nil {
-		s.handlers = make(map[string]func(c context.Context, msg *domain.NotifyMessage) error)
+		s.handlers = make(map[string]SchedulerHandlerFunc)
 	}
 	s.handlers[action] = handler
 }

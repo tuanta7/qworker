@@ -3,17 +3,16 @@ package connectoruc
 import (
 	"context"
 	"github.com/tuanta7/qworker/internal/domain"
-	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
 )
 
 type UseCase struct {
-	connectorRepo *pgrepo.ConnectorRepository
+	connectorRepo Repository
 	logger        *logger.ZapLogger
 }
 
-func NewUseCase(connectorRepo *pgrepo.ConnectorRepository, zl *logger.ZapLogger) *UseCase {
+func NewUseCase(connectorRepo Repository, zl *logger.ZapLogger) *UseCase {
 	return &UseCase{
 		connectorRepo: connectorRepo,
 		logger:        zl,

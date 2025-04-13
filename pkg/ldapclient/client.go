@@ -9,32 +9,38 @@ import (
 	"time"
 )
 
-type LDAPClient struct {
+type LDAPClient interface {
+	NewConnection(url string, timeout time.Duration) (LDAPConn, error)
+	NewLDAPPool(url string, maxConns int) (LDAPPool, error)
+}
+
+type ldapClient struct {
 	lock        sync.Mutex
-	pools       map[string]*LDAPPool
+	pools       map[string]LDAPPool
 	skipVerify  bool
 	maxPoolWait time.Duration
 }
 
-func NewLDAPClient(skipVerify bool) *LDAPClient {
-	return &LDAPClient{
+func NewLDAPClient(skipVerify bool) LDAPClient {
+	return &ldapClient{
 		lock:       sync.Mutex{},
-		pools:      make(map[string]*LDAPPool),
+		pools:      make(map[string]LDAPPool),
 		skipVerify: skipVerify,
 	}
 }
 
-func (c *LDAPClient) NewLDAPPool(url string, maxConns int) (LDAPPool, error) {
+func (c *ldapClient) NewLDAPPool(addr string, maxConns int) (LDAPPool, error) {
 	p := &ldapPool{
 		lock:     sync.Mutex{},
-		conns:    make(chan *ldap.Conn, maxConns),
+		conns:    make(chan LDAPConn, maxConns),
 		maxConns: maxConns,
 		maxWait:  c.maxPoolWait,
 	}
 
 	for i := 0; i < p.maxConns; i++ {
-		conn, err := c.NewConnection(url, 0)
+		conn, err := c.NewConnection(addr, 0)
 		if err != nil {
+			p.Close()
 			return nil, err
 		}
 		p.conns <- conn
@@ -43,17 +49,15 @@ func (c *LDAPClient) NewLDAPPool(url string, maxConns int) (LDAPPool, error) {
 	return p, nil
 }
 
-func (c *LDAPClient) NewConnection(url string, timeout time.Duration) (*ldap.Conn, error) {
-	dialerConfig := &net.Dialer{
+func (c *ldapClient) NewConnection(addr string, timeout time.Duration) (LDAPConn, error) {
+	conn, err := ldap.DialURL(addr, ldap.DialWithDialer(&net.Dialer{
 		Timeout: timeout,
-	}
-
-	conn, err := ldap.DialURL(url, ldap.DialWithDialer(dialerConfig))
+	}))
 	if err != nil {
 		return nil, err
 	}
 
-	serverName, _ := extractServerName(url)
+	serverName, _ := extractServerName(addr)
 	err = conn.StartTLS(&tls.Config{
 		ServerName:         serverName,
 		InsecureSkipVerify: c.skipVerify,
@@ -74,6 +78,9 @@ func extractServerName(rawURL string) (string, error) {
 
 	host, _, err := net.SplitHostPort(url.Host)
 	if err != nil {
+		if err.Error() == "missing port in address" {
+			return url.Host, nil
+		}
 		return "", err
 	}
 

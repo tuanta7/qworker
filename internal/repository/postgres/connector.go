@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/tuanta7/qworker/internal/domain"
 	"github.com/tuanta7/qworker/pkg/db"
@@ -11,18 +12,19 @@ import (
 )
 
 type ConnectorRepository struct {
-	*db.PostgresClient
+	db.PostgresClient
 }
 
-func NewConnectorRepository(pc *db.PostgresClient) *ConnectorRepository {
+func NewConnectorRepository(pc db.PostgresClient) *ConnectorRepository {
 	return &ConnectorRepository{pc}
 }
 
 func (r *ConnectorRepository) List(ctx context.Context, page, pageSize uint64) ([]*domain.Connector, error) {
-	query, args, err := r.PostgresClient.QueryBuilder.
+	query, args, err := r.PostgresClient.QueryBuilder().
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnector).
 		Offset((page - 1) * pageSize).
+		OrderBy(fmt.Sprintf("%s DESC", domain.ColCreatedAt)).
 		Limit(pageSize).
 		ToSql()
 	if err != nil {
@@ -33,7 +35,7 @@ func (r *ConnectorRepository) List(ctx context.Context, page, pageSize uint64) (
 }
 
 func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) ([]*domain.Connector, error) {
-	query, args, err := r.PostgresClient.QueryBuilder.
+	query, args, err := r.PostgresClient.QueryBuilder().
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnector).
 		Where(squirrel.Eq{domain.ColEnabled: enabled}).
@@ -46,7 +48,7 @@ func (r *ConnectorRepository) ListByEnabled(ctx context.Context, enabled bool) (
 }
 
 func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.Connector, error) {
-	query, args, err := r.PostgresClient.QueryBuilder.
+	query, args, err := r.PostgresClient.QueryBuilder().
 		Select(domain.AllConnectorCols...).
 		From(domain.TableConnector).
 		Where(squirrel.Eq{domain.ColConnectorID: id}).
@@ -56,7 +58,7 @@ func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.C
 	}
 
 	c := &domain.Connector{}
-	err = r.Pool.QueryRow(ctx, query, args...).Scan(
+	err = r.Pool().QueryRow(ctx, query, args...).Scan(
 		&c.ConnectorID,
 		&c.ConnectorType,
 		&c.DisplayName,
@@ -91,7 +93,7 @@ func (r *ConnectorRepository) GetByID(ctx context.Context, id uint64) (*domain.C
 }
 
 func (r *ConnectorRepository) UpdateSyncInfo(ctx context.Context, c *domain.Connector) error {
-	query, args, err := r.PostgresClient.QueryBuilder.
+	query, args, err := r.PostgresClient.QueryBuilder().
 		Update(domain.TableConnector).
 		Set(domain.ColLastSync, c.LastSync).
 		Set(domain.ColUpdatedAt, c.UpdatedAt).
@@ -101,12 +103,12 @@ func (r *ConnectorRepository) UpdateSyncInfo(ctx context.Context, c *domain.Conn
 		return err
 	}
 
-	_, err = r.Pool.Exec(ctx, query, args...)
+	_, err = r.Pool().Exec(ctx, query, args...)
 	return err
 }
 
-func (r *ConnectorRepository) list(ctx context.Context, query string, args []interface{}) ([]*domain.Connector, error) {
-	rows, err := r.Pool.Query(ctx, query, args...)
+func (r *ConnectorRepository) list(ctx context.Context, query string, args []any) ([]*domain.Connector, error) {
+	rows, err := r.Pool().Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

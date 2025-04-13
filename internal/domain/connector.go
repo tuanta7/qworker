@@ -1,12 +1,9 @@
 package domain
 
 import (
-	"database/sql/driver"
 	"encoding/json"
-	"reflect"
-	"time"
-
 	"github.com/tuanta7/qworker/pkg/sqlxx"
+	"time"
 )
 
 type ConnectorType string
@@ -30,14 +27,15 @@ type Connector struct {
 
 func (c *Connector) GetSyncSettings() (*SyncSettings, error) {
 	data := struct {
-		SS SyncSettings `json:"syncSettings"`
+		Settings SyncSettings `json:"syncSettings"`
 	}{}
 
 	err := json.Unmarshal(c.Data.Raw, &data)
 	if err != nil {
 		return nil, err
 	}
-	return &data.SS, nil
+
+	return &data.Settings, nil
 }
 
 type LDAPConnector struct {
@@ -51,54 +49,13 @@ type LDAPConnector struct {
 	SyncSettings          SyncSettings  `json:"syncSettings"`
 }
 
+type SCIMConnector struct {
+	BaseURL      string       `json:"baseUrl"`
+	SyncSettings SyncSettings `json:"syncSettings"`
+}
+
 type SyncSettings struct {
 	BatchSize     uint32        `json:"batchSize"`
 	IncSync       bool          `json:"incrementalSyncEnabled"`
 	IncSyncPeriod time.Duration `json:"incrementalSyncPeriod"`
-}
-
-type Mapper struct {
-	ExternalID  string            `json:"external_id"`
-	Username    string            `json:"username"`
-	FullName    string            `json:"full_name"`
-	Email       string            `json:"email"`
-	PhoneNumber string            `json:"phone_number"`
-	CreatedAt   string            `json:"created_at"`
-	UpdatedAt   string            `json:"updated_at"`
-	Custom      map[string]string `json:"custom"`
-}
-
-func (m *Mapper) Scan(v any) error {
-	if v == nil {
-		return nil
-	}
-
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr && rv.IsNil() {
-		return nil
-	}
-
-	var data []byte
-	switch val := v.(type) {
-	case string:
-		data = []byte(val)
-	case []byte:
-		data = val
-	default:
-		return nil
-	}
-
-	if !json.Valid(data) {
-		return nil
-	}
-
-	return json.Unmarshal(data, m)
-}
-
-func (m *Mapper) Value() (driver.Value, error) {
-	return json.Marshal(m)
-}
-
-func (m *Mapper) ToMap() (map[string]string, error) {
-	return nil, nil
 }

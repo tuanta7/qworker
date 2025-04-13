@@ -2,10 +2,14 @@ package utils
 
 import "time"
 
+const (
+	ldapTimeFormat = "20060102150405.0Z"
+)
+
 func TimeToLDAPString(t time.Time) string {
-	return t.Format("20060102150405.0Z")
+	return t.Format(ldapTimeFormat)
 }
 
 func LDAPStringToTime(ldapTime string) (time.Time, error) {
-	return time.Parse("20060102150405Z", ldapTime)
+	return time.Parse(ldapTimeFormat, ldapTime)
 }

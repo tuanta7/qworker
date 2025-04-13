@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/hibiken/asynq"
 	"github.com/tuanta7/qworker/config"
-	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/handler"
+	"github.com/tuanta7/qworker/internal/usecase/connector"
 	"github.com/tuanta7/qworker/internal/usecase/worker"
 	"github.com/tuanta7/qworker/pkg/logger"
 )

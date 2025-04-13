@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type DurationString time.Duration
+type DurationSeconds time.Duration
 
 type TextData struct {
 	Raw    []byte

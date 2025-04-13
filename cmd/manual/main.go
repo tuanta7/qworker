@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	cfg := config.NewConfig()
+	cfg := config.InitConfig()
 	zl := logger.MustNewLogger(cfg.Logger.Level)
 
 	redisClient := db.MustNewRedisSentinelClient(cfg)

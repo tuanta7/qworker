@@ -8,7 +8,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/tuanta7/qworker/config"
 	"github.com/tuanta7/qworker/internal/domain"
-	redisrepo "github.com/tuanta7/qworker/internal/repository/redis"
 	"github.com/tuanta7/qworker/pkg/logger"
 	"go.uber.org/zap"
 	"strconv"
@@ -16,35 +15,33 @@ import (
 	"time"
 )
 
-type jobInfo struct {
+type JobInfo struct {
 	EntryID cron.EntryID
 	Period  time.Duration
 }
 
 type UseCase struct {
-	lock           *sync.Mutex
+	lock           sync.Mutex
+	jobs           map[string]JobInfo // expect to have only one scheduler instance
 	cronScheduler  *cron.Cron
-	jobs           map[string]*jobInfo // expect to have only one scheduler instance
 	asynqClient    *asynq.Client
 	asynqInspector *asynq.Inspector
-	taskRepository *redisrepo.TaskRepository
 	logger         *logger.ZapLogger
 }
 
 func NewUseCase(
 	asynqClient *asynq.Client,
 	asynqInspector *asynq.Inspector,
-	taskRepository *redisrepo.TaskRepository,
 	logger *logger.ZapLogger,
 ) *UseCase {
 	return &UseCase{
-		lock:           &sync.Mutex{},
+		lock:           sync.Mutex{},
 		cronScheduler:  cron.New(cron.WithSeconds()),
-		jobs:           make(map[string]*jobInfo),
+		jobs:           make(map[string]JobInfo),
 		asynqClient:    asynqClient,
 		asynqInspector: asynqInspector,
-		taskRepository: taskRepository,
-		logger:         logger,
+
+		logger: logger,
 	}
 }
 
@@ -99,7 +96,7 @@ func (u *UseCase) CreateJob(period time.Duration, queue string, message *domain.
 	}
 
 	u.lock.Lock()
-	u.jobs[strconv.FormatUint(message.ConnectorID, 10)] = &jobInfo{
+	u.jobs[strconv.FormatUint(message.ConnectorID, 10)] = JobInfo{
 		EntryID: jobID,
 		Period:  period,
 	}

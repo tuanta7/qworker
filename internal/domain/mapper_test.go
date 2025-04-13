@@ -1,46 +1,52 @@
 package domain
 
 import (
-	testifyassert "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-var mockMapper = &Mapper{
-	ExternalID:  "uid",
-	FullName:    "cn",
-	Email:       "mail",
-	PhoneNumber: "mobile",
-	CreatedAt:   "whenCreated",
-	UpdatedAt:   "whenChanges",
-	Custom: map[string]string{
-		"lastName": "sn",
-		"username": "sAMAccountName", // override
-	},
-}
-
-func TestMapper_Scan(t *testing.T) {
-	assert := testifyassert.New(t)
-
+func TestMapperScan(t *testing.T) {
 	m := &Mapper{}
 
-	err := m.Scan("")
-	assert.Equal(nil, err)
-	assert.Equal(Mapper{}, *m)
+	t.Run("empty_mapper", func(t *testing.T) {
+		err := m.Scan("")
+		assert.Equal(t, nil, err)
+		assert.Equal(t, Mapper{}, *m)
+	})
 
-	err = m.Scan(nil)
-	assert.Equal(nil, err)
-	assert.Equal(Mapper{}, *m)
+	t.Run("nil_mapper", func(t *testing.T) {
+		err := m.Scan(nil)
+		assert.Equal(t, nil, err)
+		assert.Equal(t, Mapper{}, *m)
+	})
 
-	err = m.Scan("{")
-	assert.Equal(nil, err)
-	assert.Equal(Mapper{}, *m)
+	t.Run("invalid_json", func(t *testing.T) {
+		err := m.Scan("{")
+		assert.Equal(t, nil, err)
+		assert.Equal(t, Mapper{}, *m)
+	})
 
-	s, err := mockMapper.Value()
-	assert.Equal(nil, err)
+	t.Run("success", func(t *testing.T) {
+		mockMapper := &Mapper{
+			ExternalID:  "uid",
+			FullName:    "cn",
+			Email:       "mail",
+			PhoneNumber: "mobile",
+			CreatedAt:   "whenCreated",
+			UpdatedAt:   "whenChanges",
+			Custom: map[string]string{
+				"lastName": "sn",
+				"username": "sAMAccountName", // override
+			},
+		}
 
-	err = m.Scan(s)
-	assert.Equal(nil, err)
-	assert.Equal(*mockMapper, *m)
-	assert.Equal(mockMapper.Email, m.Email)
-	assert.Equal("sn", m.Custom["lastName"])
+		s, err := mockMapper.Value()
+		assert.Equal(t, nil, err)
+
+		err = m.Scan(s)
+		assert.Equal(t, nil, err)
+		assert.Equal(t, *mockMapper, *m)
+		assert.Equal(t, mockMapper.Email, m.Email)
+		assert.Equal(t, "sn", m.Custom["lastName"])
+	})
 }
