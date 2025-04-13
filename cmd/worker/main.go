@@ -1,8 +1,8 @@
 package main
 
 import (
-	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	pgrepo "github.com/tuanta7/qworker/internal/repository/postgres"
+	"github.com/tuanta7/qworker/internal/usecase/connector"
 	"github.com/tuanta7/qworker/internal/usecase/worker"
 	"github.com/tuanta7/qworker/pkg/cipherx"
 	"github.com/tuanta7/qworker/pkg/ldapclient"
@@ -15,9 +15,9 @@ import (
 )
 
 func main() {
-	cfg := config.NewConfig()
+	cfg := config.Init()
 
-	aead, err := cipherx.New([]byte(cfg.AesGsmSecret), cipherx.AEAD)
+	aead, err := cipherx.New(cipherx.AEAD, []byte(cfg.AESSecret))
 	if err != nil {
 		panic(err)
 	}
@@ -25,21 +25,20 @@ func main() {
 	zl := logger.MustNewLogger(cfg.Logger.Level)
 	ldapClient := ldapclient.NewLDAPClient(cfg.StartTLSConfig.SkipVerify)
 
-	pgClient := db.MustNewPostgresClient(cfg, db.WithMaxConns(10))
+	pgClient := db.MustNewPostgresClient(cfg, db.WithMaxConns(10), db.WithMinConns(3))
 	defer pgClient.Close()
 
 	redisClient := db.MustNewRedisSentinelClient(cfg)
 	defer redisClient.Close()
 
-	srv := asynq.NewServerFromRedisClient(redisClient,
-		asynq.Config{
-			Concurrency:    6,
-			Queues:         config.QueuePriority,
-			StrictPriority: true,
-		})
-
 	asynqInspector := asynq.NewInspectorFromRedisClient(redisClient)
 	defer asynqInspector.Close()
+
+	srv := asynq.NewServerFromRedisClient(redisClient, asynq.Config{
+		Concurrency:    6,
+		Queues:         config.QueuePriority,
+		StrictPriority: true,
+	})
 
 	userRepository := pgrepo.NewUserRepository(pgClient)
 	connectorRepository := pgrepo.NewConnectorRepository(pgClient)

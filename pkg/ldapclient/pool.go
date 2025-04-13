@@ -7,9 +7,16 @@ import (
 	"time"
 )
 
+type LDAPConn interface {
+	Bind(username, password string) error
+	UnauthenticatedBind(username string) error
+	Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error)
+	Close() (err error)
+}
+
 type LDAPPool interface {
-	Get() (*ldap.Conn, error)
-	Return(c *ldap.Conn)
+	GetConn() (LDAPConn, error)
+	ReturnConn(c LDAPConn)
 	Close()
 }
 
@@ -17,11 +24,11 @@ type ldapPool struct {
 	lock     sync.Mutex
 	maxConns int
 	maxWait  time.Duration
-	conns    chan *ldap.Conn
+	conns    chan LDAPConn
 	closed   bool
 }
 
-func (p *ldapPool) Get() (*ldap.Conn, error) {
+func (p *ldapPool) GetConn() (LDAPConn, error) {
 	select {
 	case conn := <-p.conns:
 		return conn, nil
@@ -30,7 +37,7 @@ func (p *ldapPool) Get() (*ldap.Conn, error) {
 	}
 }
 
-func (p *ldapPool) Return(c *ldap.Conn) {
+func (p *ldapPool) ReturnConn(c LDAPConn) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -50,5 +57,10 @@ func (p *ldapPool) Close() {
 		p.closed = true
 		close(p.conns)
 	}
+
+	for conn := range p.conns {
+		conn.Close()
+	}
+
 	p.lock.Unlock()
 }

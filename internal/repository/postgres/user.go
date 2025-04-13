@@ -9,10 +9,10 @@ import (
 )
 
 type UserRepository struct {
-	*db.PostgresClient
+	db.PostgresClient
 }
 
-func NewUserRepository(pc *db.PostgresClient) *UserRepository {
+func NewUserRepository(pc db.PostgresClient) *UserRepository {
 	return &UserRepository{pc}
 }
 
@@ -21,7 +21,7 @@ func (r *UserRepository) BuildBulkUpsertQuery(users []*domain.User) *squirrel.In
 		return nil
 	}
 
-	insertQuery := r.QueryBuilder.Insert(domain.TableUser).Columns(domain.AllUserSyncCols...)
+	insertQuery := r.QueryBuilder().Insert(domain.TableUser).Columns(domain.AllUserSyncCols...)
 	for _, user := range users {
 		insertQuery = insertQuery.Values(
 			uuid.NewString(),
@@ -51,7 +51,7 @@ func (r *UserRepository) BuildBulkUpsertQuery(users []*domain.User) *squirrel.In
 }
 
 func (r *UserRepository) ExecuteTransaction(ctx context.Context, queries []squirrel.Sqlizer) error {
-	tx, err := r.Pool.Begin(ctx)
+	tx, err := r.Pool().Begin(ctx)
 	if err != nil {
 		return err
 	}

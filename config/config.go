@@ -14,7 +14,7 @@ type Config struct {
 	ServerName     string `envconfig:"SERVER_NAME" default:"worker"`
 	ServerHost     string `envconfig:"SERVER_HOST" default:"localhost"`
 	ServerPort     uint32 `envconfig:"SERVER_PORT" default:"8080"`
-	AesGsmSecret   string `envconfig:"AES_GSM_SECRET" default:"1234567887654321"`
+	AESSecret      string `envconfig:"AES_SECRET" default:"1234567887654321"`
 	Logger         *LoggerConfig
 	StartTLSConfig *StartTLSConfig
 	Postgres       *PostgresConfig
@@ -45,8 +45,8 @@ type StartTLSConfig struct {
 	SkipVerify bool `envconfig:"SKIP_VERIFY" default:"false"`
 }
 
-func NewConfig() *Config {
-	var config = &Config{}
+func Init() *Config {
+	config := &Config{}
 
 	err := godotenv.Load()
 	if err != nil {
@@ -75,7 +75,7 @@ const (
 
 var (
 	QueuePriority = map[string]int{
-		QueueFullSync:        2, // critical
+		QueueFullSync:        3, // critical
 		QueueIncrementalSync: 1, // default
 	}
 

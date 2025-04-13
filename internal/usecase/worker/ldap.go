@@ -31,9 +31,9 @@ func (u *UseCase) ldapSync(ctx context.Context, connector *domain.Connector, fil
 	}
 	defer conn.Close()
 
-	pwd, err := u.cipher.DecryptFromStdBase64(parsedConfig.SystemAccountPassword)
+	pwd, err := u.cipher.Decrypt(parsedConfig.SystemAccountPassword)
 	if err != nil {
-		u.logger.Error("ldapSync - u.cipher.DecryptFromStdBase64", zap.Error(err))
+		u.logger.Error("ldapSync - u.cipher.Decrypt", zap.Error(err))
 		return err
 	}
 

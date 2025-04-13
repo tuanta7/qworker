@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 	"github.com/tuanta7/qworker/config"
-	connectoruc "github.com/tuanta7/qworker/internal/connector"
 	"github.com/tuanta7/qworker/internal/domain"
+	"github.com/tuanta7/qworker/internal/usecase/connector"
 	"github.com/tuanta7/qworker/internal/usecase/scheduler"
 	"strconv"
 	"time"
@@ -40,7 +40,7 @@ func (h *SchedulerHandler) Init(ctx context.Context) error {
 			continue
 		}
 
-		err = h.createIncJob(connector.ConnectorID, syncSettings.IncSyncPeriod)
+		err = h.createIncrementalSyncJob(connector.ConnectorID, syncSettings.IncSyncPeriod)
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func (h *SchedulerHandler) HandleInsertConnector(ctx context.Context, message *d
 		return nil
 	}
 
-	err = h.createIncJob(connector.ConnectorID, syncSettings.IncSyncPeriod)
+	err = h.createIncrementalSyncJob(connector.ConnectorID, syncSettings.IncSyncPeriod)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (h *SchedulerHandler) HandleUpdateConnector(ctx context.Context, message *d
 		_ = h.schedulerUC.CleanJob(sID)
 	}
 
-	err = h.createIncJob(connector.ConnectorID, syncSettings.IncSyncPeriod)
+	err = h.createIncrementalSyncJob(connector.ConnectorID, syncSettings.IncSyncPeriod)
 	if err != nil {
 		return err
 	}
@@ -115,13 +115,14 @@ func (h *SchedulerHandler) HandleDeleteConnector(ctx context.Context, message *d
 	return h.schedulerUC.CleanJob(strconv.FormatUint(message.ID, 10))
 }
 
-func (h *SchedulerHandler) createIncJob(id uint64, period time.Duration) error {
-	message := &domain.QueueMessage{
-		ConnectorID: id,
-		TaskType:    config.QueueTask[config.QueueIncrementalSync],
-	}
+func (h *SchedulerHandler) createIncrementalSyncJob(id uint64, period time.Duration) error {
+	queue := config.QueueIncrementalSync
+	taskType := config.QueueTask[queue]
 
-	err := h.schedulerUC.CreateJob(period, config.QueueIncrementalSync, message)
+	err := h.schedulerUC.CreateJob(period, queue, &domain.QueueMessage{
+		ConnectorID: id,
+		TaskType:    taskType,
+	})
 	if err != nil {
 		return err
 	}

@@ -8,42 +8,15 @@ import (
 )
 
 type aead struct {
-	aesgcm cipher.AEAD
+	gcm cipher.AEAD
 }
 
-func (a aead) Encrypt(plaintext []byte, opts ...[]byte) ([]byte, error) {
-	var additionalData []byte
-	if len(opts) > 0 {
-		additionalData = opts[0]
-	}
-
-	nonce := make([]byte, a.aesgcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	ct := a.aesgcm.Seal(nil, nonce, plaintext, additionalData)
-	return append(nonce, ct...), nil
-}
-
-func (a aead) Decrypt(ciphertext []byte, opts ...[]byte) ([]byte, error) {
-	var additionalData []byte
-	if len(opts) > 0 {
-		additionalData = opts[0]
-	}
-
-	nonce := ciphertext[:a.aesgcm.NonceSize()]
-	ct := ciphertext[a.aesgcm.NonceSize():]
-
-	return a.aesgcm.Open(nil, nonce, ct, additionalData)
-}
-
-func (a aead) EncryptToStdBase64(plaintext string) (string, error) {
+func (a aead) Encrypt(plaintext string, opts ...[]byte) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
 
-	ciphertext, err := a.Encrypt([]byte(plaintext))
+	ciphertext, err := a.encrypt([]byte(plaintext), opts...)
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +24,22 @@ func (a aead) EncryptToStdBase64(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func (a aead) DecryptFromStdBase64(base64Ciphertext string) (string, error) {
+func (a aead) encrypt(plaintext []byte, opts ...[]byte) ([]byte, error) {
+	var additionalData []byte
+	if len(opts) > 0 {
+		additionalData = opts[0]
+	}
+
+	nonce := make([]byte, a.gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	ciphertext := a.gcm.Seal(nil, nonce, plaintext, additionalData)
+	return append(nonce, ciphertext...), nil
+}
+
+func (a aead) Decrypt(base64Ciphertext string, opts ...[]byte) (string, error) {
 	if base64Ciphertext == "" {
 		return "", nil
 	}
@@ -62,10 +50,21 @@ func (a aead) DecryptFromStdBase64(base64Ciphertext string) (string, error) {
 		return "", err
 	}
 
-	plaintext, err := a.Decrypt(ciphertext[:n])
+	plaintext, err := a.decrypt(ciphertext[:n], opts...)
 	if err != nil {
 		return "", err
 	}
 
 	return string(plaintext), nil
+}
+
+func (a aead) decrypt(c []byte, opts ...[]byte) ([]byte, error) {
+	var additionalData []byte
+	if len(opts) > 0 {
+		additionalData = opts[0]
+	}
+
+	nonce := c[:a.gcm.NonceSize()]
+	ciphertext := c[a.gcm.NonceSize():]
+	return a.gcm.Open(nil, nonce, ciphertext, additionalData)
 }

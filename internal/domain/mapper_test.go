@@ -1,7 +1,7 @@
 package domain
 
 import (
-	testifyassert "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -19,28 +19,26 @@ var mockMapper = &Mapper{
 }
 
 func TestMapper_Scan(t *testing.T) {
-	assert := testifyassert.New(t)
-
 	m := &Mapper{}
 
 	err := m.Scan("")
-	assert.Equal(nil, err)
-	assert.Equal(Mapper{}, *m)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, Mapper{}, *m)
 
 	err = m.Scan(nil)
-	assert.Equal(nil, err)
-	assert.Equal(Mapper{}, *m)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, Mapper{}, *m)
 
 	err = m.Scan("{")
-	assert.Equal(nil, err)
-	assert.Equal(Mapper{}, *m)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, Mapper{}, *m)
 
 	s, err := mockMapper.Value()
-	assert.Equal(nil, err)
+	assert.Equal(t, nil, err)
 
 	err = m.Scan(s)
-	assert.Equal(nil, err)
-	assert.Equal(*mockMapper, *m)
-	assert.Equal(mockMapper.Email, m.Email)
-	assert.Equal("sn", m.Custom["lastName"])
+	assert.Equal(t, nil, err)
+	assert.Equal(t, *mockMapper, *m)
+	assert.Equal(t, mockMapper.Email, m.Email)
+	assert.Equal(t, "sn", m.Custom["lastName"])
 }

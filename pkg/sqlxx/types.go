@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-type DurationString time.Duration
-
 type TextData struct {
 	Raw    []byte
 	Parsed any
@@ -38,3 +36,5 @@ func (t TextData) Value() (driver.Value, error) {
 func (t *TextData) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.Parsed)
 }
+
+type DurationSeconds time.Duration
